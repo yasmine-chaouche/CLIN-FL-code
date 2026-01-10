@@ -1,4 +1,4 @@
-*.log
-env
-*.csv
+*.log 
+env 
+*.csv 
 *log*
