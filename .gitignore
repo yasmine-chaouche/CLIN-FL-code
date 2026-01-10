@@ -1,8 +1,4 @@
 *.log
 env
-Cnam_dataset
-__pycache__
 *.csv
 *log*
-*.pth
-!Test-Cnam-dataset-autoencoder.ipynb
