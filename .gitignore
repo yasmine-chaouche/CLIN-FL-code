@@ -2,3 +2,5 @@
 env 
 *.csv 
 *log*
+__pycache__
+*.pdf
