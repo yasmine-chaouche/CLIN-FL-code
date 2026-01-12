@@ -13,7 +13,7 @@ This repository provides the official implementation of the framework presented 
 We evaluate our framework using two major network traffic datasets:
 
 1.  **5G3Evl (5G End-to-End Emulation):** Time-series data from a 5G network testbed covering radio, computing, and network resources. It includes anomalies like CPU overload, link failures, and packet loss[cite: 585, 587].
-2.  **CIC-IDS-2017:** A comprehensive dataset for evaluating intrusion detection systems, featuring real-world network traffic with attacks like DDoS, SQL Injection, and Brute Force [cite: 143-144].
+2.  **CIC-IDS-2017:** A comprehensive dataset for evaluating intrusion detection systems, featuring real-world network traffic with attacks like DDoS, SQL Injection, and Brute Force.
 
 
 ---
@@ -26,7 +26,6 @@ This project requires **Python 3.12.8**.
    python -m venv env
    source env/bin/activate
    pip install -r requirements.txt
-
 ## ✍️ Citation and Contact
 
 If you use our work, please also site the paper:
@@ -34,10 +33,10 @@ If you use our work, please also site the paper:
 
     @article{chaouche2024feature,
     title={Feature Skew Control for In-Network Federated Learning},
-    author={Chaouche, Yasmine and Ntumba, Patient and Secci, Stefano and Velloso, Pedro B.},
+    author={Chaouche Yasmine, Ntumba Patient, Secci Stefano and Velloso Pedro B.},
     journal={X Journal (Name of the Journal)},
     year={2025},
-    publisher={Comnet}
+    publisher={..}
     }
 
 

@@ -121,7 +121,7 @@ if __name__=='__main__':
         print("*"*20)
         # -------------------- Save Final Dataset --------------------
         split_type=f"brokerBased-{int(args.deactRatio*100)}"
-        save_dir = f'./CIC-IDS-2017/seed_{seed}_results/{split_type}_split'
+        save_dir = f'./FLSplit_CIC-IDS-2017/seed_{seed}_results/{split_type}_split'
 
         if os.path.exists(save_dir):
             shutil.rmtree(save_dir)
@@ -133,7 +133,7 @@ if __name__=='__main__':
         for aif, data in aif_partitions.items():
             print(f"{aif} has {len(data)} samples.")
             data = data.copy()
-            data.to_csv(f'./CIC-IDS-2017/seed_{seed}_results/{split_type}_split/{aif}_{split_type}.csv', index=False)  # Optional saving
+            data.to_csv(f'./FLSplit_CIC-IDS-2017/seed_{seed}_results/{split_type}_split/{aif}_{split_type}.csv', index=False)  # Optional saving
             data['AIFID'] = np.int32(aif.split('_')[1])
             total_dataframe = pd.concat([total_dataframe, data], ignore_index=True)
 
