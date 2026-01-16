@@ -19,7 +19,7 @@ We evaluate our framework using two major network traffic datasets:
 ---
 
 ## 🛠 Installation
-This project requires **Python 3.12.8**.
+This project requires **Python 3.12.8**, **NVIDIA GPU with CUDA support (for GPU acceleration)** and **At least 8GB of RAM**.
 
 1. **Create a virtual environment and install requirements:**
    ```bash
@@ -41,3 +41,37 @@ If you use our work, please also site the paper:
 
 
 If you would like to get in touch please contact: yasmine.chaouche@lecnam.net
+
+## 🧑‍💻 Run experiments
+
+### 1. FL Data generation (generate_FL_Data.py)
+This part of the framework generates federated learning datasets with broker-based architecture, topology-aware latency simulation, and data distribution analysis using Jensen-Shannon Divergence (JSD).
+
+Edit the configuration section in generate_FL_data.py:
+
+    dataset = 'CICIDS2017'  # or '5G3E'
+    seeds = [42, 123, 456]
+    nbBrokers = 3
+    nbclients = 5
+    nbDSPerBroker = 2
+    deactRatio = 0.2  # 20% deactivation ratio
+    generateConvFL = False  # True for conventional FL split
+
+### Output files:
+After running, the script generates:
+
+    ./
+    ├── FLSplit_CICIDS2017/  (if dataset == 'CICIDS2017')
+    │   ├── validation.csv
+    │   └── JSD_Matrixes/
+    │       ├── JSD_matrix_seed_42_Deact-20_5G3E.pdf
+    │       └── ... (one per seed)
+    |
+    ├── seed_<seed>_results/
+    │   └── brokerBased-<deactRatio>_split/
+    │       ├── AIF_1_brokerBased-<deactRatio>_split.csv
+    │       ├── AIF_2_brokerBased-<deactRatio>_split.csv
+    │       └── ... (one file per active client)
+    │
+    │
+    └── JSD_matrix_<deactRatio>_5G3E.pdf (aggregated results)
