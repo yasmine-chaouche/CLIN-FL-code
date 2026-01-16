@@ -931,3 +931,6 @@ def Conv_split(traindata, n_clients,seed,save_dir='./Conv_split'):
     for client_id in range(n_clients):
         client_data = traindata_with_labels[traindata_with_labels['AIFID'] == client_id].drop('AIFID', axis=1)
         client_data.to_csv(f'./Conv_split/AIF_{client_id}_Conv.csv', index=False)
+
+def set_pin_memory_for_device(device):
+    return (device.type == 'cuda')

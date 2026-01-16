@@ -44,7 +44,7 @@ If you would like to get in touch please contact: yasmine.chaouche@lecnam.net
 
 ## 🧑‍💻 Run experiments
 
-### 1. FL Data generation (generate_FL_Data.py)
+### 1. FL Data generation (`generate_FL_Data.py`)
 This part of the framework generates federated learning datasets with broker-based architecture, topology-aware latency simulation, and data distribution analysis using Jensen-Shannon Divergence (JSD).
 
 Edit the configuration section in generate_FL_data.py:
@@ -75,3 +75,13 @@ After running, the script generates:
     │
     │
     └── JSD_matrix_<deactRatio>_5G3E.pdf (aggregated results)
+
+### Output Descriptions
+
+- **AIF Data Files:** Individual CSV files for each active client (AIF) containing their assigned training samples
+- **Validation File:** Hold-out validation dataset (20% of training data)
+- **JSD Matrices:**
+
+    - Per-seed matrices showing feature-level divergence from global distribution
+    - Aggregated matrix with mean ± confidence intervals across seeds
+
