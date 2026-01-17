@@ -49,7 +49,8 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
         if not os.path.exists("JSD_Matrixes"):
             os.makedirs("JSD_Matrixes")
 
-        val_df.to_csv("5G3E_validation.csv", index=False)
+        if not os.path.exists("5G3E_validation.csv"):
+            val_df.to_csv("5G3E_validation.csv", index=False)
 
 
     elif dataset=='CICIDS2017':
@@ -76,7 +77,8 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
         if not os.path.exists("JSD_Matrixes"):
             os.makedirs("JSD_Matrixes")
     
-        val_df.to_csv("CICIDS_validation.csv", index=False)
+        if not os.path.exists("CICIDS_validation.csv"):
+            val_df.to_csv("CICIDS_validation.csv", index=False)
 
     print("Training shape:", train_df.shape)
     print("Validation shape:", val_df.shape)

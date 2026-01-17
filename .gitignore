@@ -4,3 +4,5 @@ env
 *log*
 __pycache__
 *.pdf
+*.pt
+*wandb*
