@@ -1,5 +1,4 @@
 import argparse
-import utils
 import pandas as pd
 import numpy as np
 import cudf as cdf
@@ -15,6 +14,8 @@ from torch.utils.data import TensorDataset, DataLoader
 import wandb
 from sklearn import metrics
 import torch.nn as nn
+import utils
+import data_utils
 import FL_DASVDD 
 
 def get_args():
@@ -52,9 +53,9 @@ if __name__=='__main__':
     if args.dataset == "5G3E":
         dir_5G3E = "FLSplit_5G3E"
         # --- Your data loading / preprocessing functions (unchanged) ---
-        _, df_test_preprocessed, y_test = utils.load_and_preprocess_5G3E_data()
+        _, df_test_preprocessed, y_test = data_utils.load_and_preprocess_5G3E_data()
 
-        x_test_df = utils.apply_pca_with_cuml(df_test_preprocessed, n_components=20)
+        x_test_df = data_utils.apply_pca_with_cuml(df_test_preprocessed, n_components=20)
         x_val_df=cdf.read_csv(f"./{dir_5G3E}/5G3E_validation.csv").to_pandas()
 
         X_test = torch.tensor(x_test_df.to_numpy(), dtype=torch.float32)

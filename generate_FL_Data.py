@@ -16,6 +16,7 @@ from sklearn.preprocessing import MinMaxScaler
 import seaborn as sns
 from sklearn.model_selection import train_test_split
 import sys
+import data_utils
 import utils
 warnings.filterwarnings('ignore')
 gpus = tf.config.list_physical_devices('GPU')
@@ -27,9 +28,9 @@ if gpus:
         print(e)
 
 def load_data_delays():
-    df_latency_filtered = utils.load_latency_data("./datasets/donnees_topologiques_brutes.csv")
-    inverse_cdf_backhaul = utils.get_inverse_cdf(df_latency_filtered["back-hauling-delay"])
-    inverse_cdf_synack = utils.get_inverse_cdf(df_latency_filtered["delay_syn_synack"])
+    df_latency_filtered = data_utils.load_latency_data("./datasets/donnees_topologiques_brutes.csv")
+    inverse_cdf_backhaul = data_utils.get_inverse_cdf(df_latency_filtered["back-hauling-delay"])
+    inverse_cdf_synack = data_utils.get_inverse_cdf(df_latency_filtered["delay_syn_synack"])
     return inverse_cdf_backhaul, inverse_cdf_synack
 
 def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRatio,generateConvFL,bitrate):
@@ -37,9 +38,9 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
     inverse_cdf_backhaul, inverse_cdf_synack = load_data_delays()
     # -------------------- Load and Preprocess Dataset --------------------
     if dataset=='5G3E':
-        df_train_preprocessed, df_test_preprocessed, y_test = utils.load_and_preprocess_5G3E_data()
-        x_train = utils.apply_pca_with_cuml(df_train_preprocessed, n_components=20)
-        x_test_df = utils.apply_pca_with_cuml(df_test_preprocessed, n_components=20)
+        df_train_preprocessed, df_test_preprocessed, y_test = data_utils.load_and_preprocess_5G3E_data()
+        x_train = data_utils.apply_pca_with_cuml(df_train_preprocessed, n_components=20)
+        x_test_df = data_utils.apply_pca_with_cuml(df_test_preprocessed, n_components=20)
         train_df, val_df = train_test_split(x_train, test_size=0.2, random_state=42, shuffle=True)
 
         if not os.path.exists("FLSplit_5G3E"):
@@ -57,8 +58,8 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
         df_train = cudf.read_csv('./datasets/CIC-IDS-2017/Monday-WorkingHours.pcap_ISCX.csv').to_pandas()
         df_test = cudf.read_csv('./datasets/CIC-IDS-2017/Wednesday-workingHours.pcap_ISCX.csv').to_pandas()
 
-        df_train_preprocessed = utils.data_preprocessing_CICIDS2017(df_train)
-        df_test_preprocessed  = utils.data_preprocessing_CICIDS2017(df_test)
+        df_train_preprocessed = data_utils.data_preprocessing_CICIDS2017(df_train)
+        df_test_preprocessed  = data_utils.data_preprocessing_CICIDS2017(df_test)
 
         # Extract labels (keep as pandas Series for now)
         y_test = df_test_preprocessed[' Label']
@@ -66,8 +67,8 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
         df_train_features = df_train_preprocessed.drop(columns=[' Label'], errors='ignore')
         df_test_features  = df_test_preprocessed.drop(columns=[' Label'], errors='ignore')   
 
-        x_train_df = utils.apply_pca_with_cuml(df_train_features, n_components=11)
-        x_test_df = utils.apply_pca_with_cuml(df_test_features, n_components=11)
+        x_train_df = data_utils.apply_pca_with_cuml(df_train_features, n_components=11)
+        x_test_df = data_utils.apply_pca_with_cuml(df_test_features, n_components=11)
         train_df, val_df = train_test_split(x_train_df, test_size=0.2, random_state=42, shuffle=True)
 
         if not os.path.exists("FLSplit_CICIDS2017"):

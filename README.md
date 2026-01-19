@@ -1,9 +1,9 @@
-# Feature Skew Control for In-Network Federated Learning
+# CLIN-FL: A Cost-efficient Load balancing solution for In-Network Federated Learning withnon-IID data
 
 [![Python Version](https://img.shields.io/badge/python-3.12.8-blue)](https://www.python.org/downloads/release/python-3128/)
 
 This repository provides the official implementation of the framework presented in:  
-**"Feature Skew Control for In-Network Federated Learning"** *Yasmine Chaouche, Patient Ntumba, Stefano Secci, Pedro B. Velloso (Cnam, Paris, France)*
+**"CLIN-FL: A Cost-efficient Load balancing solution for In-Network Federated Learning withnon-IID data"** *Yasmine Chaouche, Patient Ntumba, Stefano Secci, Pedro B. Velloso (Cnam, Paris, France)*
 
 ## 📄 Abstract
 
@@ -31,8 +31,8 @@ This project requires **Python 3.12.8**, **NVIDIA GPU with CUDA support (for GPU
 If you use our work, please also site the paper:
 
 
-    @article{chaouche2024feature,
-    title={Feature Skew Control for In-Network Federated Learning},
+    @article{chaoucheclinfl,
+    title={CLIN-FL: A Cost-efficient Load balancing solution for In-Network Federated Learning withnon-IID data},
     author={Chaouche Yasmine, Ntumba Patient, Secci Stefano and Velloso Pedro B.},
     journal={X Journal (Name of the Journal)},
     year={2025},
