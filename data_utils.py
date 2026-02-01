@@ -89,6 +89,7 @@ def load_and_preprocess_5G3E_data():
     # Drop unnecessary columns
     df_train = df_train.drop(columns=['Unnamed: 0'], errors='ignore')
     df_test = df_test.drop(columns=['Unnamed: 0', 'Unnamed: 0.1', 'node_vmstat_pgfault_server_1'], errors='ignore')
+
     df_x_test = df_test.drop(columns='attack')
     y_test = df_test['attack'].to_numpy().astype(int)
 

@@ -17,23 +17,25 @@ import torch.nn as nn
 import utils
 import data_utils
 import FL_DASVDD 
+import autoencoder
+import cicids_autoencoder
 
 def get_args():
     parser=argparse.ArgumentParser()
     parser.add_argument('--nbclients',type=int,default=5,help="Number of clients")
     parser.add_argument('--nbBrokers',type=int,default=3,help="Number of brokers")
     parser.add_argument('--nbDSPerBroker',type=int,default=2,help="Number of datasources per broker")
-    parser.add_argument('--dataset',type=str,default='5G3E',help="dataset used for FL simulation")
-    parser.add_argument('--model',type=str,default='DASVDD',help="model used for FL simulation: autoencoder or DASVDD")
+    parser.add_argument('--dataset',type=str,default='CICIDS2017',help="dataset used for FL simulation")
+    parser.add_argument('--model',type=str,default='autoencoder',help="model used for FL simulation: autoencoder or FL-DASVDD")
     parser.add_argument('--threshold',type=float,default=0.09,help="Variance threshold for feature selection")
-    parser.add_argument('--deactRatio',type=float,default=0.2,help="Ratio of deactivated links per broker")
+    parser.add_argument('--deactRatio',type=float,default=0,help="Ratio of deactivated links (r) per broker")
     parser.add_argument('--generateConvFL',action='store_true',help="Whether to generate conventional FL split or broker-based split")
-    parser.add_argument('--device',type=str,default='cuda:0',help="Device to use for computations")
+    parser.add_argument('--device',type=str,default='cuda:1',help="Device to use for computations")
     parser.add_argument("--mode", type=str, choices=["train", "test"], default="train", help="Choose 'train' or 'test'")
-    parser.add_argument("--nbRounds", type=int, default=3, help="Number of FL rounds")
+    parser.add_argument("--nbRounds", type=int, default=40, help="Number of FL rounds")
     parser.add_argument("--localEpochs", type=int, default=1, help="Number of local epochs per client")
     parser.add_argument("--batchSize", type=int, default=128, help="Batch size for training")
-    parser.add_argument('--K',type=float,default=0.8,help="Portion of samples used for model update in DASVDD")
+    parser.add_argument('--K',type=float,default=0.8,help="Portion of samples used for model update in FL-DASVDD")
     parser.add_argument('--T',type=int,default=5,help="Total number of initializations")
     parser.add_argument('--Adagard_lr',type=float,default=0.0005,help="learning rate for Adagard optimizer")
     parser.add_argument('--Adagard_lr_decay',type=float,default=0.00001,help="learning rate decay for Adagard optimizer")
@@ -53,9 +55,12 @@ if __name__=='__main__':
     if args.dataset == "5G3E":
         dir_5G3E = "FLSplit_5G3E"
         # --- Your data loading / preprocessing functions (unchanged) ---
-        _, df_test_preprocessed, y_test = data_utils.load_and_preprocess_5G3E_data()
+        #_, df_test_preprocessed, y_test = data_utils.load_and_preprocess_5G3E_data()
 
-        x_test_df = data_utils.apply_pca_with_cuml(df_test_preprocessed, n_components=20)
+        #x_test_df = data_utils.apply_pca_with_cuml(df_test_preprocessed, n_components=20)
+        x_test_df=cdf.read_csv(f"./{dir_5G3E}/5G3E_test.csv").to_pandas().drop(columns='label')
+        y_test = cdf.read_csv(f"./{dir_5G3E}/5G3E_test.csv").to_pandas()['label'].to_numpy().astype(int)
+        print("y_test count:", np.bincount(y_test))
         x_val_df=cdf.read_csv(f"./{dir_5G3E}/5G3E_validation.csv").to_pandas()
 
         X_test = torch.tensor(x_test_df.to_numpy(), dtype=torch.float32)
@@ -65,6 +70,7 @@ if __name__=='__main__':
         x_test_loader = DataLoader(TensorDataset(X_test), batch_size=args.batchSize, shuffle=False, pin_memory=utils.set_pin_memory_for_device(device))
         print("X_val shape:", X_val.shape)
         print("X_test shape:", X_test.shape)
+
 
         in_shape = 20
         code_size = 10
@@ -81,14 +87,13 @@ if __name__=='__main__':
         if args.mode == "train":
             client_files = [f'./{split_type}_split/AIF_{i}_{split_type}.csv' for i in range(args.nbclients)]
 
-            # print shapes for sanity
             print("\nClients data shapes:")
             for p in client_files:
                 print(cdf.read_csv(p).to_pandas().shape)
             print("-----")
 
             wandb.init(
-                project=f"Test-{args.dataset}",
+                project=f"CLINFL-ProjectTest-{args.dataset}",
                 name=f"{args.model}-{split_type}-seed{seed}-localep{args.localEpochs}-batch{args.batchSize}",
                 config={
                     "batch_size": args.batchSize,
@@ -102,7 +107,8 @@ if __name__=='__main__':
                 },
             )
 
-            if args.model != "DASVDD":
+            if args.model == "FL-DASVDD":
+                print("Starting FL-DASVDD training...")
                 global_model, global_C, history = FL_DASVDD.federated_train(
                     device=device,
                     client_files=client_files,
@@ -137,13 +143,14 @@ if __name__=='__main__':
                 print("Training finished. Final global center norm:", global_C.norm().item())
             
             elif args.model == "autoencoder":
-                pass  # Implement autoencoder training if needed
+
+                global_model = autoencoder.federated_learning(client_files, args.nbRounds,x_test_df, y_test)
 
         elif args.mode == "test":
             ####################################################################################
             # Test after training
 
-            if args.model != "DASVDD":
+            if args.model != "FL-DASVDD":
                 model_path = f"{split_type}_split/{args.model}-global_model_{split_type}-seed{seed}-localep{args.localEpochs}-batch{args.batchSize}.pt"
 
                 # Load the checkpoint
@@ -182,3 +189,68 @@ if __name__=='__main__':
                 print(f"Recall: {recall*100:.3f}%)")
                 print(f"F1 Score: {f1*100:.3f}/%)")
                 print(f"MCC: {mcc*100:.3f}/%)")
+
+    elif args.dataset == "CICIDS2017":
+        print("CICIDS2017 dataset ")
+
+        dir_CICIDS2017 = "FLSplit_CICIDS2017"
+
+        # x_test=cdf.read_csv(f"./{dir_CICIDS2017}/CICIDS_test.csv").to_pandas().drop(columns='label')
+        # y_test = cdf.read_csv(f"./{dir_CICIDS2017}/CICIDS_test.csv").to_pandas()['label'].to_numpy().astype(int)
+        # print("y_test count:", np.bincount(y_test))
+
+        df_train = cdf.read_csv('datasets/CIC-IDS-2017/Monday-WorkingHours.pcap_ISCX.csv').to_pandas()
+        df_test=cdf.read_csv('datasets/CIC-IDS-2017/Tuesday-WorkingHours.pcap_ISCX.csv').to_pandas()
+        print("Train: ",df_train.shape)
+        print("Test: ",df_test.shape)
+
+        print(df_test[" Label"].value_counts())
+
+        df_train_preprocessed=data_utils.data_preprocessing_CICIDS2017(df_train)
+        df_test_preprocessed=data_utils.data_preprocessing_CICIDS2017(df_test)
+
+        print(df_train_preprocessed.columns.equals(df_test_preprocessed.columns))
+        y_test = df_test_preprocessed[' Label']
+
+        df_train_features = df_train_preprocessed.drop(columns=[' Label'], errors='ignore')
+        df_test_features = df_test_preprocessed.drop(columns=[' Label'],errors='ignore')
+
+        # Concatenate
+        combined_df = pd.concat([df_train_features, df_test_features], axis=0)
+
+        pca_combined_data=data_utils.apply_pca_with_cuml(combined_df,11)
+
+        #Datasets ready to use
+        x_train = pca_combined_data[:len(df_train)]
+
+        x_test = pca_combined_data[len(df_train):]
+
+        in_shape = 11
+        code_size = 8
+
+        split_type = f"brokerBased-{int(args.deactRatio * 100)}"
+        # split_type="Conv"
+
+        if split_type != "Conv":
+            out_dir = f"seed_{seed}_results"
+            full_path = os.path.join(dir_CICIDS2017, out_dir)
+            os.makedirs(full_path, exist_ok=True)
+            os.chdir(full_path)
+
+        if args.mode == "train":
+            client_files = [f'./{split_type}_split/AIF_{i}_{split_type}.csv' for i in range(args.nbclients)]
+
+            print("\nClients data shapes:")
+            for p in client_files:
+                print(cdf.read_csv(p).to_pandas().shape)
+            print("-----")
+
+            wandb.init(
+                project=f"CLINFL-ProjectTest-{args.dataset}",
+                name=f"{args.model}-{split_type}-seed{seed}-localep{args.localEpochs}-batch{args.batchSize}",
+                config={
+                    "batch_size": args.batchSize,
+                    "code_size":code_size,
+                },
+            )
+            global_model = cicids_autoencoder.federated_learning(args.nbclients, args.nbRounds,split_type,x_test,y_test)

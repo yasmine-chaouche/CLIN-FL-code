@@ -201,7 +201,7 @@ def DASVDD_test(model,C,in_shape,Gamma,test_loader,labels,criterion,device):
 # ----------------------------
 def client_local_update(model, in_shape, client_loader, val_loader,
                         client_n_samples, device, optimizer,scheduler, update_center,
-                        K, local_epochs, C_local, global_gamma,criterion ):
+                        K, localEpochs, C_local, global_gamma,criterion ):
     """
     Perform local training on `model` using local_C (C_local).
     - model: local model (already copied from global and moved to device)
@@ -222,7 +222,7 @@ def client_local_update(model, in_shape, client_loader, val_loader,
     total_svdd = 0.0
     total_center_loss=0.0
 
-    for epoch in range(max(1, int(local_epochs))):
+    for epoch in range(max(1, int(localEpochs))):
         for batch in client_loader:
             if isinstance(batch, list):
                 batch = batch[0]
@@ -280,7 +280,7 @@ def client_local_update(model, in_shape, client_loader, val_loader,
 # ----------------------------
 def federated_train(device, client_files, val_loader, test_loader, y_test,
                     in_shape, code_size, lr=1e-3, batch_size=256, global_rounds=100,
-                    local_epochs=1, Adagard_lr=0.01, Adagard_lr_decay=0.0, weight_decay=1e-2,K=0.8,
+                    localEpochs=1, Adagard_lr=0.01, Adagard_lr_decay=0.0, weight_decay=1e-2,K=0.8,
                     seed=12, T=10, verbose=True):
     utils.set_random_seeds(seed)
     device = torch.device(device)
@@ -362,7 +362,7 @@ def federated_train(device, client_files, val_loader, test_loader, y_test,
                 scheduler=scheduler,
                 update_center=local_update_center,
                 K=K,
-                local_epochs=local_epochs,
+                localEpochs=localEpochs,
                 C_local=local_C,
                 global_gamma=weighted_gamma,
                 criterion=criterion

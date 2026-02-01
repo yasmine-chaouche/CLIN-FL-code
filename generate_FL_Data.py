@@ -41,6 +41,8 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
         df_train_preprocessed, df_test_preprocessed, y_test = data_utils.load_and_preprocess_5G3E_data()
         x_train = data_utils.apply_pca_with_cuml(df_train_preprocessed, n_components=20)
         x_test_df = data_utils.apply_pca_with_cuml(df_test_preprocessed, n_components=20)
+
+        x_test_df["label"] = y_test
         train_df, val_df = train_test_split(x_train, test_size=0.2, random_state=42, shuffle=True)
 
         if not os.path.exists("FLSplit_5G3E"):
@@ -52,6 +54,10 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
 
         if not os.path.exists("5G3E_validation.csv"):
             val_df.to_csv("5G3E_validation.csv", index=False)
+
+        if not os.path.exists("5G3E_test.csv"):
+            x_test_df.to_csv("5G3E_test.csv", index=False)
+
 
 
     elif dataset=='CICIDS2017':
@@ -70,6 +76,7 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
         x_train_df = data_utils.apply_pca_with_cuml(df_train_features, n_components=11)
         x_test_df = data_utils.apply_pca_with_cuml(df_test_features, n_components=11)
         train_df, val_df = train_test_split(x_train_df, test_size=0.2, random_state=42, shuffle=True)
+        x_test_df["label"] = y_test.to_numpy()
 
         if not os.path.exists("FLSplit_CICIDS2017"):
             os.makedirs("FLSplit_CICIDS2017")
@@ -80,6 +87,9 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
     
         if not os.path.exists("CICIDS_validation.csv"):
             val_df.to_csv("CICIDS_validation.csv", index=False)
+
+        if not os.path.exists("CICIDS_test.csv"):
+            x_test_df.to_csv("CICIDS_test.csv", index=False)
 
     print("Training shape:", train_df.shape)
     print("Validation shape:", val_df.shape)
@@ -222,9 +232,9 @@ def main():
     
     # -------------------- Configuration --------------------
     dataset = 'CICIDS2017'  # 'CICIDS2017' or '5G3E'
-    nbBrokers = 3
+    nbBrokers = 5
     nbclients = 5
-    nbDSPerBroker = 2
+    nbDSPerBroker = 1
     deactRatio = 0  # 20% deactivation ratio
     generateConvFL = False  # Set to True for conventional FL split
     seeds = [12]

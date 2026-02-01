@@ -85,3 +85,6 @@ After running, the script generates:
     - Per-seed matrices showing feature-level divergence from global distribution
     - Aggregated matrix with mean ± confidence intervals across seeds
 
+
+### 2. FL training (`main.py`)
+
