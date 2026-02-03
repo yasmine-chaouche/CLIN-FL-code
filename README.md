@@ -62,9 +62,10 @@ After running, the script generates:
 
     ./
     ├── FLSplit_CICIDS2017/  (if dataset == 'CICIDS2017')
-    │   ├── validation.csv
+    │   ├── CICIDS2017_validation.csv
+    |   ├── CICIDS2017_test.csv
     │   └── JSD_Matrixes/
-    │       ├── JSD_matrix_seed_42_Deact-20_5G3E.pdf
+    │       ├── JSD_matrix_seed_42_Deact-20_CICIDS2017.pdf
     │       └── ... (one per seed)
     |
     ├── seed_<seed>_results/
@@ -74,7 +75,7 @@ After running, the script generates:
     │       └── ... (one file per active client)
     │
     │
-    └── JSD_matrix_<deactRatio>_5G3E.pdf (aggregated results)
+    └── JSD_matrix_<deactRatio>_CICIDS2017.pdf (aggregated results)
 
 ### Output Descriptions
 

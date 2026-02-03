@@ -178,7 +178,7 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
             plt.xlabel("Clients")
             plt.ylabel("Features")
             plt.title("Jensen-Shannon Divergence Matrix: The divergence of client i from the global state")
-            plt.savefig(f'./JSD_Matrixes/JSD_matrix_seed_{seed}_Deact-{int(deactRatio*100)}_5G3E.pdf', bbox_inches='tight')
+            plt.savefig(f'./JSD_Matrixes/JSD_matrix_seed_{seed}_Deact-{int(deactRatio*100)}_{dataset}.pdf', bbox_inches='tight')
             jsd_matrices.append(jsd_df_broker)
 
         # -------------------- Aggregate JSD Results --------------------
@@ -209,7 +209,7 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
         plt.ylabel("Features", fontsize=17)
         plt.yticks(fontsize=17) 
         plt.xticks(fontsize=17)
-        plt.savefig(f'JSD_matrix_{int(deactRatio*100)}_5G3E.pdf', bbox_inches='tight')
+        plt.savefig(f'JSD_matrix_{int(deactRatio*100)}_{dataset}.pdf', bbox_inches='tight')
 
     else:
         utils.Conv_split(train_df, nbBrokers,12)  # Here nbBrokers should be the number of client
