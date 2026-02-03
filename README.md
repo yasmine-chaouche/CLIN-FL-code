@@ -1,9 +1,9 @@
-# CLIN-FL: A Cost-efficient Load balancing solution for In-Network Federated Learning withnon-IID data
+# CLIN-FL: A Cost-efficient Load balancing solution for In-Network Federated Learning with non-IID data
 
 [![Python Version](https://img.shields.io/badge/python-3.12.8-blue)](https://www.python.org/downloads/release/python-3128/)
 
 This repository provides the official implementation of the framework presented in:  
-**"CLIN-FL: A Cost-efficient Load balancing solution for In-Network Federated Learning withnon-IID data"** *Yasmine Chaouche, Patient Ntumba, Stefano Secci, Pedro B. Velloso (Cnam, Paris, France)*
+**"CLIN-FL: A Cost-efficient Load balancing solution for In-Network Federated Learning with non-IID data"** *Yasmine Chaouche, Patient Ntumba, Stefano Secci, Pedro B. Velloso (Cnam, Paris, France)*
 
 ## 📄 Abstract
 
