@@ -235,7 +235,7 @@ def main():
     nbBrokers = 5
     nbclients = 5
     nbDSPerBroker = 1
-    deactRatio = 0  # 20% deactivation ratio
+    deactRatio = 0  
     generateConvFL = False  # Set to True for conventional FL split
     seeds = [12]
 

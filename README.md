@@ -89,3 +89,45 @@ After running, the script generates:
 
 ### 2. FL training (`main.py`)
 
+    python main.py [OPTIONS]
+    
+## Arguments
+
+### Network Configuration
+
+**`--nbclients`** 
+number of clients participating in the FL simulation. 
+
+**`--deactRatio`** The ratio of deactivated links (r) per broker.
+
+### Dataset & Model
+
+**`--dataset`** The dataset used: `CICIDS2017`or `5G3E`
+
+**`--model`** The ML model used for the FL simulation: `autoencoder` or `FL-DASVDD`
+
+### Training Configuration
+
+**`--mode`** Specifies whether to train a new model or test an saved one. `train` or `test`
+
+**`--nbRounds`** The number of FL rounds to execute.
+
+**`--localEpochs`** The number of local training epochs each client performs for each FL round.
+
+**`--batchSize`** The batch size used during local training on clients.
+
+**`--learningRate`** The learning rate for local model training.
+
+**`--weightDecay`** The weight decay (L2 regularization) coefficient for local training.
+
+### FL-DASVDD Specific Parameters
+
+**`--K`** The portion of samples used for model update in the FL-DASVDD model. 
+
+**`--T`** The total number of initializations for the FL-DASVDD model. 
+
+### Optimizer Configuration
+
+**`--Adagard_lr`** The learning rate for the Adagrad optimizer.
+
+**`--Adagard_lr_decay`** The learning rate decay factor for the Adagrad optimizer.
