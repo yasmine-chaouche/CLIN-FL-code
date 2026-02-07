@@ -17,12 +17,7 @@ import utils
 
 class AE_model_5G3E(nn.Module):
     def __init__(self, input_shape, code_size,**kwargs):
-        """
-        Accepts input_shape as positional or kwarg:
-          AE_model_5G3E(input_shape=... )  OR  AE_model_5G3E(in_shape)
-        """
         super().__init__()
-        # encoder: input_shape -> 25 -> 10 -> code(10)
         self.encoder = nn.Sequential(
             nn.Linear(input_shape, 25),
             nn.LeakyReLU(),
@@ -31,7 +26,6 @@ class AE_model_5G3E(nn.Module):
             nn.Linear(code_size, code_size),
             nn.LeakyReLU()
         )
-        # decoder: code(10) -> 10 -> 25 -> input_shape
         self.decoder = nn.Sequential(
             nn.Linear(code_size, code_size),
             nn.LeakyReLU(),
@@ -45,7 +39,30 @@ class AE_model_5G3E(nn.Module):
         recon = self.decoder(code)
         return recon, code
 
+class AE_model_CICIDS2017(nn.Module):
+    def __init__(self, input_shape, code_size,**kwargs):
+        super().__init__()
+        self.encoder = nn.Sequential(
+            nn.Linear(input_shape, 15),
+            nn.LeakyReLU(),
+            nn.Linear(15, code_size),
+            nn.LeakyReLU(),
+            nn.Linear(code_size, code_size),
+            nn.LeakyReLU()
+        )
+        self.decoder = nn.Sequential(
+            nn.Linear(code_size, code_size),
+            nn.LeakyReLU(),
+            nn.Linear(code_size, 15),
+            nn.LeakyReLU(),
+            nn.Linear(15, input_shape)
+        )
 
+    def forward(self, x):
+        code = self.encoder(x)
+        recon = self.decoder(code)
+        return recon, code
+    
 # FedAvg weighted aggregator
 def fedavg(client_states, client_ns):
     if len(client_states) == 0:
@@ -62,30 +79,18 @@ def fedavg(client_states, client_ns):
             global_state[k] += state[k].to(global_state[k].device) * w
     return global_state
 
-# ----------------------------
-# Data loader helper
-# ----------------------------
+
 def load_client_loader(csv_path, batch_size, in_shape=None, shuffle=True, device=torch.device("cpu")):
-    """
-    Read CSV with cudf (like your original), return DataLoader and sample count.
-    The CSV is converted to pandas then to torch.tensor (float32).
-    """
     df = cudf.read_csv(csv_path).to_pandas()
     X = torch.tensor(df.to_numpy(), dtype=torch.float32)
     ds = TensorDataset(X)
     loader = DataLoader(ds, batch_size=batch_size, shuffle=shuffle, pin_memory=utils.set_pin_memory_for_device(device))
     return loader, len(df)
 
-# ----------------------------
-# Gamma tuning (robust)
-# ----------------------------
+
 @torch.no_grad()
-def tune_gamma(AE_class, in_shape,code_size, train_loader, device, T=10, eps=1e-8):
-    """
-    Estimate gamma = E[RE] / E[R] over T random-initialized AEs.
-    RE: per-sample mean squared reconstruction error
-    R : per-sample squared L2 norm of code vector (||code||^2)
-    """
+def tune_gamma(AE_class, in_shape, code_size, train_loader, device, T=10, eps=1e-8):
+
     device = torch.device(device)
     accum = 0.0
     used = 0
@@ -101,8 +106,8 @@ def tune_gamma(AE_class, in_shape,code_size, train_loader, device, T=10, eps=1e-
             x = batch.view(-1, in_shape).to(device)
             recon, code = model(x)
             # per-sample reconstruction (mean squared error per sample)
-            per_sample_re = torch.mean((recon - x) ** 2, dim=1)   # (b,)
-            per_sample_r = torch.sum(code ** 2, dim=1)           # (b,)
+            per_sample_re = torch.mean((recon - x) ** 2, dim=1) 
+            per_sample_r = torch.sum(code ** 2, dim=1)        
             RE_sum += float(per_sample_re.sum().item())
             R_sum += float(per_sample_r.sum().item())
             n_total += x.size(0)
@@ -116,9 +121,7 @@ def tune_gamma(AE_class, in_shape,code_size, train_loader, device, T=10, eps=1e-
     gamma = accum / max(1, used)
     return float(gamma)
 
-# ----------------------------
-# Validation & Test helpers
-# ----------------------------
+
 def DASVDD_validate(model, in_shape, C, val_loader, criterion, Gamma, device):
     """
     Validate model and also validate the learned center C by comparing it
@@ -153,12 +156,7 @@ def DASVDD_validate(model, in_shape, C, val_loader, criterion, Gamma, device):
             svdd_loss += batch_svdd_loss.item()
             num_batches += 1
 
-            # collect codes (move to CPU to free GPU mem if desired)
             all_codes.append(code.detach().cpu())
-
-    if num_batches == 0:
-        # no validation data
-        return 0.0, 0.0, 0.0, 0.0, 0.0
 
     # compute averages
     val_loss_avg = val_loss / num_batches
@@ -166,14 +164,9 @@ def DASVDD_validate(model, in_shape, C, val_loader, criterion, Gamma, device):
     svdd_loss_avg = svdd_loss / num_batches
 
     # compute global mean code over the entire validation set
-    if len(all_codes) == 0:
-        center_mse = 0.0
-    else:
-        codes_cat = torch.cat(all_codes, dim=0)      # shape: (N_val, latent_dim)
-        mean_code = codes_cat.mean(dim=0).to(C.device)  # move to same device as C
-        # center MSE (using provided criterion, typically nn.MSELoss() single-value)
-        # criterion expects (input, target) so we compare C and mean_code
-        center_mse = float(criterion(C, mean_code).item())
+    codes_cat = torch.cat(all_codes, dim=0)      
+    mean_code = codes_cat.mean(dim=0).to(C.device) 
+    center_mse = float(criterion(C, mean_code).item())
 
     return val_loss_avg, ae_loss_avg, svdd_loss_avg, center_mse
 
@@ -189,26 +182,15 @@ def DASVDD_test(model,C,in_shape,Gamma,test_loader,labels,criterion,device):
       loss = criterion(x_test_hat,x_test) + Gamma*torch.sum((code_test.to(device) - C) ** 2, dim=1)
       score.extend(loss.cpu().numpy().tolist())
     score = np.array(score)
-  # Convert to arrays
   scores = np.array(score)
   labels = np.array(labels)
 
 
   return metrics.roc_auc_score(labels,score)*100, metrics.average_precision_score(labels,score)*100,scores
 
-# ----------------------------
-# Local client update (corrected)
-# ----------------------------
 def client_local_update(model, in_shape, client_loader, val_loader,
                         client_n_samples, device, optimizer,scheduler, update_center,
                         K, localEpochs, C_local, global_gamma,criterion ):
-    """
-    Perform local training on `model` using local_C (C_local).
-    - model: local model (already copied from global and moved to device)
-    - optimizer: optimizer for model parameters
-    - update_center: optimizer for C_local (expects param list [C_local])
-    - C_local: torch tensor on device, requires_grad=True
-    """
     device = torch.device(device)
     model.to(device)
     C_local = C_local.to(device)
@@ -239,7 +221,6 @@ def client_local_update(model, in_shape, client_loader, val_loader,
             train_loss = criterion(outputs, x[:Num_batch, :]) + global_gamma * R
             train_loss.backward()
             optimizer.step()
-            # scheduler.step()
 
             total_loss += train_loss.item()
             total_ae += criterion(outputs, x[:Num_batch, :]).item()
@@ -247,7 +228,7 @@ def client_local_update(model, in_shape, client_loader, val_loader,
             last_R = R.item()
             batch_count += 1
 
-            # center update using leftover samples (if any)
+            # center update using leftover samples
             if Num_batch < N:
                 _, c_code = model(x[Num_batch:, :])
                 if c_code.numel() > 0:
@@ -266,8 +247,8 @@ def client_local_update(model, in_shape, client_loader, val_loader,
         avg_svdd = total_svdd / batch_count
         avg_center_loss = total_center_loss / batch_count
 
-    # validation metrics (using detached center)
-    val_loss, val_ae, val_svdd,center_mse = DASVDD_validate(model, in_shape, C_local.detach(), val_loader, criterion, global_gamma, device)
+    # validation metrics
+    val_loss, val_ae, val_svdd, center_mse = DASVDD_validate(model, in_shape, C_local.detach(), val_loader, criterion, global_gamma, device)
 
     # Return updated state dict, n_samples, train metrics, val metrics, client center (cpu), last_R, gamma
     return copy.deepcopy(model.state_dict()), client_n_samples, \
@@ -275,10 +256,8 @@ def client_local_update(model, in_shape, client_loader, val_loader,
            {"val_loss": val_loss, "val_ae_loss": val_ae, "val_svdd_loss": val_svdd, "val_center_mse":center_mse}, \
            avg_center_loss,C_local.detach().cpu(), last_R, global_gamma
 
-# ----------------------------
-# Federated server loop
-# ----------------------------
-def federated_train(device, client_files, val_loader, test_loader, y_test,
+
+def federated_train(device, dataset,client_files, val_loader, test_loader, y_test,
                     in_shape, code_size, lr=1e-3, batch_size=256, global_rounds=100,
                     localEpochs=1, Adagard_lr=0.01, Adagard_lr_decay=0.0, weight_decay=1e-2,K=0.8,
                     seed=12, T=10, verbose=True):
@@ -290,9 +269,13 @@ def federated_train(device, client_files, val_loader, test_loader, y_test,
     rounds_no_improve_loss = 0
     rounds_no_improve_center = 0
     nb_clients = len(client_files)
-    # build client loaders
     client_loaders = []
     client_counts = []
+
+    if dataset == "5G3E":
+        model_class = AE_model_5G3E
+    elif dataset == "CICIDS2017":
+        model_class = AE_model_CICIDS2017
     for path in client_files:
         loader, n = load_client_loader(path, batch_size=batch_size, in_shape=in_shape, shuffle=True, device=device)
         client_loaders.append(loader)
@@ -303,7 +286,7 @@ def federated_train(device, client_files, val_loader, test_loader, y_test,
         print("Computing local gamma for each client (T={}):".format(T))
     client_gammas = []
     for i, loader in enumerate(client_loaders):
-        g = tune_gamma(AE_model_5G3E, in_shape,code_size, loader, device, T=T)
+        g = tune_gamma(model_class, in_shape, code_size, loader, device, T=T)
         client_gammas.append(g)
         if verbose:
             print(f" Client {i}: gamma={g:.6f}")
@@ -316,7 +299,7 @@ def federated_train(device, client_files, val_loader, test_loader, y_test,
         print("Initial aggregated global gamma:", weighted_gamma)
 
     # initialize global model and center
-    global_model = AE_model_5G3E(input_shape=in_shape,code_size=code_size).to(device)
+    global_model = model_class(input_shape=in_shape, code_size=code_size).to(device)
     global_state = global_model.state_dict()
     global_C = torch.randn(code_size, device=device, requires_grad=False)
     criterion = nn.MSELoss()
@@ -337,11 +320,11 @@ def federated_train(device, client_files, val_loader, test_loader, y_test,
 
         for cid in range(nb_clients):
             # local model: copy global weights and move to device
-            local_model = AE_model_5G3E(input_shape=in_shape,code_size=code_size)
+            local_model = model_class(input_shape=in_shape,code_size=code_size)
             local_model.load_state_dict(copy.deepcopy(global_state))
             local_model.to(device)
 
-            # create local center from global center (detached)
+            # create local center from global center 
             local_C = global_C.clone().detach().to(device)
             local_C.requires_grad = True
 
@@ -370,7 +353,7 @@ def federated_train(device, client_files, val_loader, test_loader, y_test,
 
             client_states.append(state_dict)
             client_ns.append(n)
-            client_Cs.append(C_client)  # already cpu
+            client_Cs.append(C_client) 
             client_Rs.append(R_client)
             client_train_metrics_list.append(train_metrics)
             client_val_metrics_list.append(val_metrics)
@@ -442,7 +425,7 @@ def federated_train(device, client_files, val_loader, test_loader, y_test,
             if verbose:
                 print("Warning: error in DASVDD_test:", e)
 
-        # wandb logging (if initialized)
+        # wandb logging
         wandb.log({
             "round": rnd,
             "weighted_train_loss": weighted_train_loss,

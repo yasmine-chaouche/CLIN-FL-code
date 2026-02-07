@@ -1,55 +1,28 @@
-import pandas as pd
-import cudf as cdf
-import numpy as np
-from numba import cuda
-import seaborn as sns
-import matplotlib.pyplot as plt
-from scipy.spatial.distance import jensenshannon
-import random
-from scipy.stats import dirichlet
-from sklearn.cluster import KMeans
-from torch.backends import cudnn
-import torch
-import tensorflow as tf
 import os
-from sklearn.feature_selection import VarianceThreshold
-from sklearn.preprocessing import StandardScaler,MinMaxScaler,RobustScaler
-from sklearn.decomposition import IncrementalPCA
-import warnings
-from cuml.decomposition import PCA  # GPU version
-import cupy as cp
 import shutil
+import random
+import warnings
 from collections import defaultdict
-from scipy.interpolate import interp1d
-from tensorflow import keras
-from keras.models import Model
-from keras.layers import Input, Dense, Activation,Dropout
-from keras import regularizers, initializers
-from tensorflow.keras.losses import mae
-from sklearn.metrics import (
-    accuracy_score, recall_score, classification_report, 
-    confusion_matrix, roc_curve, auc, f1_score, precision_score, matthews_corrcoef
-)
-from keras.callbacks import EarlyStopping
-from tensorflow.keras.optimizers import Adam,Nadam
-from tensorflow.keras.models import clone_model
-from tensorflow.keras import layers
-# Ignore SettingWithCopyWarning
-warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
-# Ignore FutureWarning
-warnings.simplefilter(action='ignore', category=FutureWarning)
-from scipy.stats import t
+
+import numpy as np
+import pandas as pd
 import cupy as cp
 import cudf
-from tensorflow.keras.models import load_model
-from tensorflow.keras.losses import MeanSquaredError
-import subprocess
-from sklearn.preprocessing import MinMaxScaler
-import cudf
-from tensorflow.keras.callbacks import ReduceLROnPlateau
+import torch
 import torch.nn.functional as F
+import tensorflow as tf
 
-def set_random_seeds(seed=2):
+from scipy.spatial.distance import jensenshannon
+from scipy.stats import t
+from sklearn.cluster import KMeans
+from sklearn.metrics import (
+    accuracy_score, recall_score, f1_score, precision_score, matthews_corrcoef
+)
+
+warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
+def set_random_seeds(seed=12):
     np.random.seed(seed)
     tf.random.set_seed(seed)
     random.seed(seed)
@@ -77,8 +50,8 @@ def compute_jsd_matrix(df):
     for feature in feature_columns:
         global_counts, bins = np.histogram(df_copy[feature], bins=20, density=True)
         global_proba = global_counts / global_counts.sum()
-        global_histograms[feature] = cp.array(global_proba)  # Move to GPU
-        bins_dict[feature] = bins  # Store bin edges
+        global_histograms[feature] = cp.array(global_proba) 
+        bins_dict[feature] = bins  
 
     # Compute JSD for each feature and client in parallel
     for i, feature in enumerate(feature_columns):
@@ -88,8 +61,8 @@ def compute_jsd_matrix(df):
         for j, client in enumerate(range(NbClients)):
             client_data = df_gpu[df_gpu['AIFID'] == client][feature].to_pandas().dropna()
             client_counts, _ = np.histogram(client_data, bins=bins, density=True)
-            client_proba = cp.array(client_counts / client_counts.sum())  # Move to GPU
-            jsd_matrix_gpu[i, j] = jensenshannon(global_proba.get(), client_proba.get())  # Use GPU arrays
+            client_proba = cp.array(client_counts / client_counts.sum()) 
+            jsd_matrix_gpu[i, j] = jensenshannon(global_proba.get(), client_proba.get()) 
         jsd_matrix_gpu[i, j+1] = cp.mean(jsd_matrix_gpu[i, :j+1])  # Compute mean on GPU
 
     jsd_matrix = jsd_matrix_gpu.get()
@@ -167,11 +140,10 @@ def thresholdTuning(df, iterations):
         'f1_score': [],
         'mcc': [],
     }
-    for i in range(1, iterations):  # Avoid 0% quantile (min value)
+    for i in range(1, iterations): 
         thresh_value = df['error'].quantile(i / iterations)
         preds = df['error'] > thresh_value
 
-        # Use binary metrics directly
         acc = accuracy_score(df['y_true'], preds)
         prec = precision_score(df['y_true'], preds)
         rc = recall_score(df['y_true'], preds)

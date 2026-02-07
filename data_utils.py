@@ -1,53 +1,13 @@
-import pandas as pd
-import cudf as cdf
-import numpy as np
-from numba import cuda
-import seaborn as sns
-import matplotlib.pyplot as plt
-from scipy.spatial.distance import jensenshannon
-import random
-from scipy.stats import dirichlet
-from sklearn.cluster import KMeans
-from torch.backends import cudnn
-import torch
-import tensorflow as tf
-import os
-from sklearn.feature_selection import VarianceThreshold
-from sklearn.preprocessing import StandardScaler,MinMaxScaler,RobustScaler
-from sklearn.decomposition import IncrementalPCA
 import warnings
-from cuml.decomposition import PCA  # GPU version
-import cupy as cp
-import shutil
-from collections import defaultdict
+import numpy as np
+import pandas as pd
+import cudf
 from scipy.interpolate import interp1d
-from tensorflow import keras
-from keras.models import Model
-from keras.layers import Input, Dense, Activation,Dropout
-from keras import regularizers, initializers
-from tensorflow.keras.losses import mae
-from sklearn.metrics import (
-    accuracy_score, recall_score, classification_report, 
-    confusion_matrix, roc_curve, auc, f1_score, precision_score, matthews_corrcoef
-)
-from keras.callbacks import EarlyStopping
-from tensorflow.keras.optimizers import Adam,Nadam
-from tensorflow.keras.models import clone_model
-from tensorflow.keras import layers
-# Ignore SettingWithCopyWarning
-warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
-# Ignore FutureWarning
-warnings.simplefilter(action='ignore', category=FutureWarning)
-from scipy.stats import t
-import cupy as cp
-import cudf
-from tensorflow.keras.models import load_model
-from tensorflow.keras.losses import MeanSquaredError
-import subprocess
 from sklearn.preprocessing import MinMaxScaler
-import cudf
-from tensorflow.keras.callbacks import ReduceLROnPlateau
-import torch.nn.functional as F
+from cuml.decomposition import PCA
+
+warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
 def load_latency_data(filepath):

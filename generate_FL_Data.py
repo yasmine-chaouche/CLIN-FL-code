@@ -1,7 +1,5 @@
 import os
-import random
 import shutil
-import importlib
 import warnings
 from collections import defaultdict
 import matplotlib.pyplot as plt
@@ -9,13 +7,11 @@ import pandas as pd
 import numpy as np
 import cudf
 import tensorflow as tf
-from numba import cuda
 from sklearn.cluster import KMeans
-import matplotlib.pyplot as pltinterp1d
-from sklearn.preprocessing import MinMaxScaler
 import seaborn as sns
 from sklearn.model_selection import train_test_split
 import sys
+from pathlib import Path
 import data_utils
 import utils
 warnings.filterwarnings('ignore')
@@ -37,28 +33,23 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
     # -------------------- Load and Process Latency Data --------------------
     inverse_cdf_backhaul, inverse_cdf_synack = load_data_delays()
     # -------------------- Load and Preprocess Dataset --------------------
-    if dataset=='5G3E':
-        df_train_preprocessed, df_test_preprocessed, y_test = data_utils.load_and_preprocess_5G3E_data()
-        x_train = data_utils.apply_pca_with_cuml(df_train_preprocessed, n_components=20)
-        x_test_df = data_utils.apply_pca_with_cuml(df_test_preprocessed, n_components=20)
+    if dataset == '5G3E':
+        # 1. Load and Transform Data
+        df_train, df_test, y_test = data_utils.load_and_preprocess_5G3E_data()
+        
+        x_train = data_utils.apply_pca_with_cuml(df_train, n_components=20)
+        x_test = data_utils.apply_pca_with_cuml(df_test, n_components=20)
+        x_test["label"] = y_test
 
-        x_test_df["label"] = y_test
         train_df, val_df = train_test_split(x_train, test_size=0.2, random_state=42, shuffle=True)
 
-        if not os.path.exists("FLSplit_5G3E"):
-            os.makedirs("FLSplit_5G3E")
-        os.chdir("FLSplit_5G3E")   
+        Path("FLSplit_5G3E/JSD_Matrixes").mkdir(parents=True, exist_ok=True)
+        os.chdir("FLSplit_5G3E")
 
-        if not os.path.exists("JSD_Matrixes"):
-            os.makedirs("JSD_Matrixes")
-
-        if not os.path.exists("5G3E_validation.csv"):
-            val_df.to_csv("5G3E_validation.csv", index=False)
-
-        if not os.path.exists("5G3E_test.csv"):
-            x_test_df.to_csv("5G3E_test.csv", index=False)
-
-
+        files_to_save = {
+            "5G3E_validation.csv": val_df,
+            "5G3E_test.csv": x_test
+        }
 
     elif dataset=='CICIDS2017':
         df_train = cudf.read_csv('./datasets/CIC-IDS-2017/Monday-WorkingHours.pcap_ISCX.csv').to_pandas()
@@ -78,18 +69,17 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
         train_df, val_df = train_test_split(x_train_df, test_size=0.2, random_state=42, shuffle=True)
         x_test_df["label"] = y_test.to_numpy()
 
-        if not os.path.exists("FLSplit_CICIDS2017"):
-            os.makedirs("FLSplit_CICIDS2017")
+        Path("FLSplit_CICIDS2017/JSD_Matrixes").mkdir(parents=True, exist_ok=True)
         os.chdir("FLSplit_CICIDS2017")
 
-        if not os.path.exists("JSD_Matrixes"):
-            os.makedirs("JSD_Matrixes")
-    
-        if not os.path.exists("CICIDS_validation.csv"):
-            val_df.to_csv("CICIDS_validation.csv", index=False)
+        files_to_save = {
+            "CICIDS_validation.csv": val_df,
+            "CICIDS_test.csv": x_test_df
+        }
 
-        if not os.path.exists("CICIDS_test.csv"):
-            x_test_df.to_csv("CICIDS_test.csv", index=False)
+    for filename, df in files_to_save.items():
+        if not Path(filename).exists():
+            df.to_csv(filename, index=False)    
 
     print("Training shape:", train_df.shape)
     print("Validation shape:", val_df.shape)
@@ -147,12 +137,12 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
                     for aif, group in data_chunk.groupby('aif'):
                         aif_data_map[aif].append(group.drop(columns='aif'))
 
-            print("**********************************************************")
+            print("**"*12)
             # -------------------- Compute and Save Communication Cost --------------------
             total_cost = (comm_cost_broker_to_aif) *bitrate
 
             print("Total communication cost:", total_cost)
-            print("**********************************************************")
+            print("**"*12)
             # -------------------- Save Final Dataset --------------------
             split_type=f"brokerBased-{int(deactRatio*100)}"
             save_dir = f'./seed_{seed}_results/{split_type}_split'
@@ -182,10 +172,9 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
             jsd_matrices.append(jsd_df_broker)
 
         # -------------------- Aggregate JSD Results --------------------
-        jsd_array = np.stack([df.values for df in jsd_matrices], axis=2)  # shape: (n_features, n_clients+1, n_seeds)
+        jsd_array = np.stack([df.values for df in jsd_matrices], axis=2) 
         mean_jsd = np.mean(jsd_array, axis=2)
         h_jsd = np.zeros_like(mean_jsd)
-
 
         # Convert to DataFrame with column names
         mean_jsd_df = pd.DataFrame(mean_jsd, columns=[f"AIF {c+1}" for c in range(nbclients)] + ["Avg"])
@@ -196,13 +185,11 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
                 _, h = utils.confidence_interval(jsd_array[i, j, :])
                 h_jsd[i, j] = h
 
-        # Create annotations with mean ± h
         annotations = np.empty_like(mean_jsd, dtype=object)
         for i in range(mean_jsd.shape[0]):
             for j in range(mean_jsd.shape[1]):
                 annotations[i, j] = f"{mean_jsd[i, j]:.3f}\n±{h_jsd[i, j]:.3f}"
 
-        # -------------------- Plot Final Annotated JSD Heatmap --------------------
         plt.figure(figsize=(10, 8))
         sns.heatmap(mean_jsd_df, annot=annotations, fmt="", cmap="Blues", cbar=False,vmin=0, vmax=0.6, annot_kws={"size": 17, "va": "center", "ha": "center"})
         plt.xlabel("", fontsize=17)
@@ -212,7 +199,7 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
         plt.savefig(f'JSD_matrix_{int(deactRatio*100)}_{dataset}.pdf', bbox_inches='tight')
 
     else:
-        utils.Conv_split(train_df, nbBrokers,12)  # Here nbBrokers should be the number of client
+        utils.Conv_split(train_df, nbBrokers,12)  # Here nbBrokers should be the same as the number of clients
 
 
 
@@ -235,7 +222,7 @@ def main():
     nbBrokers = 5
     nbclients = 5
     nbDSPerBroker = 1
-    deactRatio = 0  
+    deactRatio = 0.2  
     generateConvFL = False  # Set to True for conventional FL split
     seeds = [12]
 
