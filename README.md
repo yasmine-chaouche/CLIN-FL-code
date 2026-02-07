@@ -18,7 +18,6 @@ We evaluate our framework using two major network traffic datasets:
 ### Network operator architecture emulation dataset:
 This framework uses a dataset designed to emulate operator network architecture. It consists of TCP traffic flows captured over two days in June 2023 (07 June and 10 June) for three major service providers: **Google/YouTube**, **Facebook**, and **Deezer**.
 
-### Data Fields
 The dataset includes the following fields:
 * **starttime**: The start time of the TCP session.
 * **stoptime**: The stop time of the TCP session.
