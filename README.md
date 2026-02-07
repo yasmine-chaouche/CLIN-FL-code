@@ -15,6 +15,21 @@ We evaluate our framework using two major network traffic datasets:
 1.  **5G3Evl (5G End-to-End Emulation):** Time-series data from a 5G network testbed covering radio, computing, and network resources. It includes anomalies like CPU overload, link failures, and packet loss[cite: 585, 587].
 2.  **CIC-IDS-2017:** A comprehensive dataset for evaluating intrusion detection systems, featuring real-world network traffic with attacks like DDoS, SQL Injection, and Brute Force.
 
+### Network operator architecture emulation dataset:
+This framework uses a dataset designed to emulate operator network architecture. It consists of TCP traffic flows captured over two days in June 2023 (07 June and 10 June) for three major service providers: **Google/YouTube**, **Facebook**, and **Deezer**.
+
+### Data Fields
+The dataset includes the following fields:
+* **starttime**: The start time of the TCP session.
+* **stoptime**: The stop time of the TCP session.
+* **delay_syn_synack**: The delay from a base station to the core network (CN), mapped as the **front-hauling delay**.
+* **delay_synack_ack**: The delay from a base station to a mobile application server located at the CN border, mapped as the **internet edge delay**.
+* **service provider**: The entity providing the content (Google, Facebook, or Deezer).
+* **tac**: The Tracking Area Code of the user equipment and base station in which the TCP flows are grouped.
+
+### Download Link
+You can download the dataset here:  
+[Download Dataset](https://box.roc.cnam.fr/index.php/s/M5WPWXMd5CDjpqG), we use the `donnees_topologiques_brutes.csv` file. 
 
 ---
 
