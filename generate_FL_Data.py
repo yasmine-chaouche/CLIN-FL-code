@@ -37,8 +37,8 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
         # 1. Load and Transform Data
         df_train, df_test, y_test = data_utils.load_and_preprocess_5G3E_data()
         
-        x_train = data_utils.apply_pca_with_cuml(df_train, n_components=20)
-        x_test = data_utils.apply_pca_with_cuml(df_test, n_components=20)
+        x_train, pca_model = data_utils.apply_pca_with_cuml(df_train, n_components=20)
+        x_test = data_utils.apply_pca_with_cuml(df_test, n_components=20, pca_model=pca_model)
         x_test["label"] = y_test
 
         train_df, val_df = train_test_split(x_train, test_size=0.2, random_state=42, shuffle=True)
@@ -55,17 +55,13 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
         df_train = cudf.read_csv('./datasets/CIC-IDS-2017/Monday-WorkingHours.pcap_ISCX.csv').to_pandas()
         df_test = cudf.read_csv('./datasets/CIC-IDS-2017/Wednesday-workingHours.pcap_ISCX.csv').to_pandas()
 
-        df_train_preprocessed = data_utils.data_preprocessing_CICIDS2017(df_train)
-        df_test_preprocessed  = data_utils.data_preprocessing_CICIDS2017(df_test)
 
-        # Extract labels (keep as pandas Series for now)
-        y_test = df_test_preprocessed[' Label']
+        df_train_features, y_train, scaler = data_utils.data_preprocessing_CICIDS2017(df_train, fit_scaler=True)
+        df_test_features, y_test = data_utils.data_preprocessing_CICIDS2017(df_test, scaler=scaler, fit_scaler=False)  
 
-        df_train_features = df_train_preprocessed.drop(columns=[' Label'], errors='ignore')
-        df_test_features  = df_test_preprocessed.drop(columns=[' Label'], errors='ignore')   
+        x_train_df, pca_model = data_utils.apply_pca_with_cuml(df_train_features, n_components=11)
+        x_test_df = data_utils.apply_pca_with_cuml(df_test_features, n_components=11, pca_model=pca_model)
 
-        x_train_df = data_utils.apply_pca_with_cuml(df_train_features, n_components=11)
-        x_test_df = data_utils.apply_pca_with_cuml(df_test_features, n_components=11)
         train_df, val_df = train_test_split(x_train_df, test_size=0.2, random_state=42, shuffle=True)
         x_test_df["label"] = y_test.to_numpy()
 
@@ -222,7 +218,7 @@ def main():
     nbBrokers = 5
     nbclients = 5
     nbDSPerBroker = 1
-    deactRatio = 0.2  
+    deactRatio = 0.2
     generateConvFL = False  # Set to True for conventional FL split
     seeds = [12]
 

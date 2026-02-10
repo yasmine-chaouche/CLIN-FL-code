@@ -17,20 +17,20 @@ import autoencoder
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--nbclients', type=int, default=5)
-    parser.add_argument('--dataset', type=str, default='5G3E', choices=['5G3E', 'CICIDS2017'])
-    parser.add_argument('--model', type=str, default='FL-DASVDD', choices=['autoencoder', 'FL-DASVDD'])
-    parser.add_argument('--deactRatio', type=float, default=0.8)
-    parser.add_argument('--device', type=str, default='cuda:0')
+    parser.add_argument('--dataset', type=str, default='CICIDS2017', choices=['5G3E', 'CICIDS2017'])
+    parser.add_argument('--model', type=str, default='autoencoder', choices=['autoencoder', 'FL-DASVDD'])
+    parser.add_argument('--deactRatio', type=float, default=0)
+    parser.add_argument('--device', type=str, default='cuda:1')
     parser.add_argument("--mode", type=str, choices=["train", "test"], default="train")
-    parser.add_argument("--nbRounds", type=int, default=2)
+    parser.add_argument("--nbRounds", type=int, default=40)
     parser.add_argument("--localEpochs", type=int, default=5)
-    parser.add_argument("--batchSize", type=int, default=128)
+    parser.add_argument("--batchSize", type=int, default=1024)
     parser.add_argument('--K', type=float, default=0.8)
-    parser.add_argument('--T', type=int, default=5)
+    parser.add_argument('--T', type=int, default=50)
     parser.add_argument('--Adagard_lr', type=float, default=0.0005)
-    parser.add_argument('--Adagard_lr_decay', type=float, default=0.00001)
-    parser.add_argument('--learningRate', type=float, default=0.001)
-    parser.add_argument('--weightDecay', type=float, default=1e-5)
+    parser.add_argument('--Adagard_lr_decay', type=float, default=1e-3)
+    parser.add_argument('--learningRate', type=float, default=1e-4)
+    parser.add_argument('--weightDecay', type=float, default=1e-3)
     return parser.parse_args()
 
 def run_evaluation(scores, y_true, model_name):
@@ -99,7 +99,8 @@ if __name__ == '__main__':
         os.chdir(full_path)
 
     if args.mode == "train":
-        wandb.init(project=f"CLINFL-ProjectTest-{args.dataset}", name=f"{args.model}-{split_type}", 
+        wandb.init(project=f"CLINFL-ProjectTest-{args.dataset}", 
+                   name=f"{args.model}-{split_type}--seed={seed}", 
                    config={"batch_size": args.batchSize, "lr": args.learningRate})
 
         client_files = [f'./{split_type}_split/AIF_{i}_{split_type}.csv' for i in range(args.nbclients)]
