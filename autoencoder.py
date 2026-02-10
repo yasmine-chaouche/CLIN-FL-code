@@ -198,14 +198,14 @@ def federated_learning(seed,dataset,localEpochs,nb_clients, nb_rounds, split_typ
         f1 = f1_score(recons_df['y_true'], recons_df['y_pred'])
         acc = accuracy_score(recons_df['y_true'], recons_df['y_pred'])
 
-        print(f"AUC_ROC: {roc_auc:.4f} | F1-Score: {f1*100:.2f}% | Threshold: {TEST_THRESHOLD:.6f}")
+        print(f"AUC_ROC: {roc_auc*100:.4f} | F1-Score: {f1*100:.2f}% | Threshold: {TEST_THRESHOLD:.6f}")
 
         wandb.log({
             "round": rnd,
             "weighted_train_loss": weighted_train_loss,
             "weighted_val_loss": weighted_val_loss,
-            "AUC_test": roc_auc,
-            "F1score": f1
+            "AUC_test": roc_auc*100,
+            "F1score": f1*100
         })
         
     return global_model
