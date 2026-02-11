@@ -38,8 +38,8 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
         df_train, df_test, y_test = data_utils.load_and_preprocess_5G3E_data()
         
         x_train, pca_model = data_utils.apply_pca_with_cuml(df_train, n_components=20)
-        x_test = data_utils.apply_pca_with_cuml(df_test, n_components=20, pca_model=pca_model)
-        x_test["label"] = y_test
+        x_test_df = data_utils.apply_pca_with_cuml(df_test, n_components=20, pca_model=pca_model)
+        x_test_df["label"] = y_test
 
         train_df, val_df = train_test_split(x_train, test_size=0.2, random_state=42, shuffle=True)
 
@@ -48,7 +48,7 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
 
         files_to_save = {
             "5G3E_validation.csv": val_df,
-            "5G3E_test.csv": x_test
+            "5G3E_test.csv": x_test_df
         }
 
     elif dataset=='CICIDS2017':
@@ -77,9 +77,10 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
         if not Path(filename).exists():
             df.to_csv(filename, index=False)    
 
+    print("Dataset Shapes after preprocessing ")
     print("Training shape:", train_df.shape)
     print("Validation shape:", val_df.shape)
-    print(f"\n Dataset Shapes after preprocessing: \n Train: {train_df.shape} \n Test: {x_test_df.shape}")
+    print("Test shape: ",x_test_df.shape)
 
     jsd_matrices = []
     if generateConvFL==False:
