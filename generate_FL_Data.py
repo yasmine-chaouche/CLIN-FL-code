@@ -38,8 +38,8 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
         df_train, df_test, y_test = data_utils.load_and_preprocess_5G3E_data()
         
         x_train, pca_model = data_utils.apply_pca_with_cuml(df_train, n_components=20)
-        x_test_df = data_utils.apply_pca_with_cuml(df_test, n_components=20, pca_model=pca_model)
-        x_test_df["label"] = y_test
+        test_df = data_utils.apply_pca_with_cuml(df_test, n_components=20, pca_model=pca_model)
+        test_df["label"] = y_test
 
         train_df, val_df = train_test_split(x_train, test_size=0.2, random_state=42, shuffle=True)
 
@@ -48,7 +48,7 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
 
         files_to_save = {
             "5G3E_validation.csv": val_df,
-            "5G3E_test.csv": x_test_df
+            "5G3E_test.csv": test_df
         }
 
     elif dataset=='CICIDS2017':
@@ -60,17 +60,17 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
         df_test_features, y_test = data_utils.data_preprocessing_CICIDS2017(df_test, scaler=scaler, fit_scaler=False)  
 
         x_train_df, pca_model = data_utils.apply_pca_with_cuml(df_train_features, n_components=11)
-        x_test_df = data_utils.apply_pca_with_cuml(df_test_features, n_components=11, pca_model=pca_model)
+        test_df = data_utils.apply_pca_with_cuml(df_test_features, n_components=11, pca_model=pca_model)
 
         train_df, val_df = train_test_split(x_train_df, test_size=0.2, random_state=42, shuffle=True)
-        x_test_df["label"] = y_test.to_numpy()
+        test_df["label"] = y_test.to_numpy()
 
         Path("FLSplit_CICIDS2017/JSD_Matrixes").mkdir(parents=True, exist_ok=True)
         os.chdir("FLSplit_CICIDS2017")
 
         files_to_save = {
             "CICIDS_validation.csv": val_df,
-            "CICIDS_test.csv": x_test_df
+            "CICIDS_test.csv": test_df
         }
 
     for filename, df in files_to_save.items():
@@ -80,7 +80,7 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
     print("Dataset Shapes after preprocessing ")
     print("Training shape:", train_df.shape)
     print("Validation shape:", val_df.shape)
-    print("Test shape: ",x_test_df.shape)
+    print("Test shape: ",test_df.shape)
 
     jsd_matrices = []
     if generateConvFL==False:
