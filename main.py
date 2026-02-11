@@ -116,7 +116,7 @@ if __name__ == '__main__':
             torch.save({"model_state": global_model.state_dict(), "center": global_C, "global_gamma": weighted_gamma, "seed": seed}, save_path)
         
         else: # autoencoder
-            global_model = autoencoder.federated_learning(seed, args.dataset, args.localEpochs, args.nbclients, 
+            global_model = autoencoder.federated_learning(seed, args.dataset, args.localEpochs, args.batchSize, args.learningRate, args.nbclients, 
                                                            args.nbRounds, split_type, x_val_loader, x_test_loader, y_test)
             torch.save(global_model.state_dict(), save_path)
 

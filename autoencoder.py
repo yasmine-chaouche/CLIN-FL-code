@@ -125,7 +125,7 @@ def get_reconstruction_error(model, loader, y_test, device):
         'y_true': y_test
     }).reset_index(drop=True)
 
-def federated_learning(seed,dataset,localEpochs,nb_clients, nb_rounds, split_type, x_val_loader, x_test_loader, y_test):
+def federated_learning(seed,dataset,localEpochs,batch_size,learningRate, nb_clients, nb_rounds, split_type, x_val_loader, x_test_loader, y_test):
     utils.set_random_seeds(seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
@@ -154,17 +154,17 @@ def federated_learning(seed,dataset,localEpochs,nb_clients, nb_rounds, split_typ
             
             # Prepare PyTorch DataLoader for client
             client_tensor = torch.tensor(df_client.values, dtype=torch.float32)
-            client_loader = DataLoader(TensorDataset(client_tensor), batch_size=1024, shuffle=True)
+            client_loader = DataLoader(TensorDataset(client_tensor), batch_size=batch_size, shuffle=True)
             
             # Local Training
             if dataset == "CICIDS2017":
                 local_model = Autoencoder_CICIDS2017(input_dim)
                 local_model.load_state_dict(global_model.state_dict())
-                optimizer = optim.NAdam(local_model.parameters())
+                optimizer = optim.NAdam(local_model.parameters(),lr=learningRate)
             elif dataset == "5G3E":
                 local_model = Autoencoder_5G3E(input_dim)
                 local_model.load_state_dict(global_model.state_dict())
-                optimizer = optim.Adam(local_model.parameters())
+                optimizer = optim.Adam(local_model.parameters(),lr=learningRate)
             state_dict, train_loss, val_loss = train_local_model(seed,
                     optimizer, local_model, client_loader, x_val_loader, device, localEpochs
             )
