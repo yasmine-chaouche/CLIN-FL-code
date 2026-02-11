@@ -456,4 +456,4 @@ def federated_train(device, dataset,client_files, val_loader, test_loader, y_tes
             "global_C_norm": global_C.norm().item()
         })
 
-    return global_model, global_C, history
+    return global_model, global_C, history, weighted_gamma

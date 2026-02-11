@@ -106,14 +106,14 @@ if __name__ == '__main__':
         client_files = [f'./{split_type}_split/AIF_{i}_{split_type}.csv' for i in range(args.nbclients)]
 
         if args.model == "FL-DASVDD":
-            global_model, global_C, _ = FL_DASVDD.federated_train(
+            global_model, global_C, _ , weighted_gamma= FL_DASVDD.federated_train(
                 device=device, dataset=args.dataset, client_files=client_files, val_loader=x_val_loader,
                 test_loader=x_test_loader, y_test=y_test, in_shape=cfg['in_shape'], code_size=cfg['code_size'],
                 lr=args.learningRate, batch_size=args.batchSize, global_rounds=args.nbRounds,
                 localEpochs=args.localEpochs, Adagard_lr=args.Adagard_lr, Adagard_lr_decay=args.Adagard_lr_decay,
                 weight_decay=args.weightDecay, K=args.K, seed=seed, T=args.T, verbose=True
             )
-            torch.save({"model_state": global_model.state_dict(), "center": global_C, "seed": seed}, save_path)
+            torch.save({"model_state": global_model.state_dict(), "center": global_C, "global_gamma": weighted_gamma, "seed": seed}, save_path)
         
         else: # autoencoder
             global_model = autoencoder.federated_learning(seed, args.dataset, args.localEpochs, args.nbclients, 
@@ -129,7 +129,7 @@ if __name__ == '__main__':
             global_model = cfg['dasvdd_model'](input_shape=cfg['in_shape'], code_size=cfg['code_size']).to(device)
             global_model.load_state_dict(checkpoint["model_state"])
             
-            auc, ap, scores = FL_DASVDD.DASVDD_test(global_model, checkpoint["center"], cfg['in_shape'], 0.0, 
+            auc, ap, scores = FL_DASVDD.DASVDD_test(global_model, checkpoint["center"], cfg['in_shape'], checkpoint["global_gamma"], 
                                                    x_test_loader, y_test, nn.MSELoss(), device)
             run_evaluation(scores, y_test, "FL-DASVDD")
             
