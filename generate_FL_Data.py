@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import cudf
-import tensorflow as tf
+# import tensorflow as tf
 from sklearn.cluster import KMeans
 import seaborn as sns
 from sklearn.model_selection import train_test_split
@@ -15,13 +15,13 @@ from pathlib import Path
 import data_utils
 import utils
 warnings.filterwarnings('ignore')
-gpus = tf.config.list_physical_devices('GPU')
-if gpus:
-    try:
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
-    except RuntimeError as e:
-        print(e)
+# gpus = tf.config.list_physical_devices('GPU')
+# if gpus:
+#     try:
+#         for gpu in gpus:
+#             tf.config.experimental.set_memory_growth(gpu, True)
+#     except RuntimeError as e:
+#         print(e)
 
 def load_data_delays():
     df_latency_filtered = data_utils.load_latency_data("./datasets/donnees_topologiques_brutes.csv")
@@ -57,30 +57,147 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
 
 
         df_train_features, y_train, scaler = data_utils.data_preprocessing_CICIDS2017(df_train, fit_scaler=True)
-        df_test_features, y_test = data_utils.data_preprocessing_CICIDS2017(df_test, scaler=scaler, fit_scaler=False)  
-
+        df_test_features, y_test,scaler = data_utils.data_preprocessing_CICIDS2017(df_test, scaler=scaler, fit_scaler=True)  
         x_train_df, pca_model = data_utils.apply_pca_with_cuml(df_train_features, n_components=11)
-        test_df = data_utils.apply_pca_with_cuml(df_test_features, n_components=11, pca_model=pca_model)
+        test_df = data_utils.apply_pca_with_cuml(df_test_features, n_components=11)
 
         train_df, val_df = train_test_split(x_train_df, test_size=0.2, random_state=42, shuffle=True)
-        test_df["label"] = y_test.to_numpy()
+    #     test_df["label"] = y_test.to_numpy()
 
-        Path("FLSplit_CICIDS2017/JSD_Matrixes").mkdir(parents=True, exist_ok=True)
-        os.chdir("FLSplit_CICIDS2017")
+    #     Path("FLSplit_CICIDS2017/JSD_Matrixes").mkdir(parents=True, exist_ok=True)
+    #     os.chdir("FLSplit_CICIDS2017")
 
-        files_to_save = {
-            "CICIDS_validation.csv": val_df,
-            "CICIDS_test.csv": test_df
-        }
+    #     files_to_save = {
+    #         "CICIDS_validation.csv": val_df,
+    #         "CICIDS_test.csv": test_df
+    #     }
 
-    for filename, df in files_to_save.items():
-        if not Path(filename).exists():
-            df.to_csv(filename, index=False)    
+    # for filename, df in files_to_save.items():
+    #     if not Path(filename).exists():
+    #         df.to_csv(filename, index=False)    
 
-    print("Dataset Shapes after preprocessing ")
-    print("Training shape:", train_df.shape)
-    print("Validation shape:", val_df.shape)
-    print("Test shape: ",test_df.shape)
+    # print("Dataset Shapes after preprocessing ")
+    # print("Training shape:", train_df.shape)
+    # print("Validation shape:", val_df.shape)
+    # print("Test shape: ",test_df.shape)
+
+    #############################################################################################################################
+    broker_range = [5, 8, 12, 16,32, 64, 128, 256]
+    T_values = []
+    c_values = []
+    N=5
+    S = 1
+    deactivation_ratios = [0, 0.2, 0.4, 0.6, 0.8]
+    bitrate=0.000444928/1000 # bitrate conversion from Mbps to Mbpms (because delays are in ms)
+
+    global_plot_data = []  # <-- stocke tous les résultats
+
+    for ratio in deactivation_ratios:
+        for B in broker_range:
+            print(f"\n\n======= Running simulation with deactivation_ratio ={ratio}, {B} Brokers, {N} AIFs, and {S} DS per Broker ============================")
+            utils.set_random_seeds()
+
+            ds_list = [f"DS_{i}" for i in range(B * S)]
+
+            # Cluster and split the data
+            labels = KMeans(n_clusters=len(ds_list), random_state=42).fit_predict(train_df)
+            ds_data = [train_df[labels == i] for i in range(len(ds_list))]
+
+            broker_ds_map = {f"B{b}": ds_list[b * S:(b + 1) * S] for b in range(B)}
+            broker_aif_map = {f"B{b}": [f"AIF_{i}" for i in range(N)] for b in range(B)}
+
+            latency_ds_to_broker = {}
+            latency_broker_to_aif = {}
+            for broker, aifs in broker_aif_map.items():
+                for aif_idx, aif in enumerate(aifs):
+                    # For simplicity, assign DS round-robin to AIFs
+                    ds_idx = aif_idx % S
+                    if ds_idx < len(broker_ds_map[broker]):
+                        ds = broker_ds_map[broker][ds_idx]
+                        u = np.random.rand()
+                        latency_broker_to_aif[(broker, aif)] = float(inverse_cdf_backhaul(u))
+                        latency_ds_to_broker[(ds, broker)] = float(inverse_cdf_synack(u))
+
+            updated_broker_aif_map, updated_latency_broker_to_aif = utils.deactivate_per_broker2(
+                latency_broker_to_aif, broker_aif_map, ratio)
+
+            max_ds_to_broker_latency = max(latency_ds_to_broker.values())
+            max_broker_to_aif_latency = max(updated_latency_broker_to_aif.values())
+            T = max_ds_to_broker_latency + max_broker_to_aif_latency
+            T_values.append(T)
+
+            aif_data_map = defaultdict(list)
+            c1, c2 = 0, 0
+
+            for b, ds_list in broker_ds_map.items():
+                ds_data_copy = ds_data.copy()
+                utils.set_random_seeds()
+                aif_choices = updated_broker_aif_map[b]
+                print("Broker ", b, " has AIF choices: ", aif_choices)
+
+                for ds in ds_list:
+                    data_chunk = ds_data_copy[int(ds.split('_')[1]) - 1]
+                    n_rows = data_chunk.shape[0]
+                    c1 += n_rows * latency_ds_to_broker[(ds, b)]
+
+                    selected_aifs = np.random.choice(aif_choices, size=n_rows)
+                    unique, counts = np.unique(selected_aifs, return_counts=True)
+                    c2 += sum(counts[i] * updated_latency_broker_to_aif[(b, unique[i])] for i in range(len(unique)))
+
+                    data_chunk['aif'] = selected_aifs
+                    for aif, group in data_chunk.groupby('aif'):
+                        aif_data_map[aif].append(group.drop(columns='aif'))
+
+            C = (c1 + c2) * bitrate
+            c_values.append(C)
+
+            aif_partitions = {aif: pd.concat(chunks, ignore_index=True) for aif, chunks in aif_data_map.items()}
+
+            total_dataframe = pd.DataFrame()
+            for aif, data in aif_partitions.items():
+                print(f"{aif} has {len(data)} samples.")
+                data = data.copy()
+                data['AIFID'] = np.int32(aif.split('_')[1])
+                total_dataframe = pd.concat([total_dataframe, data], ignore_index=True)
+
+            jsd_df_broker = utils.compute_jsd_matrix(total_dataframe)
+            print(jsd_df_broker)
+            jsd_avg_uniform = jsd_df_broker.iloc[:, -1].tolist()
+
+            # Ajoute les résultats à la liste globale avec ratio
+            global_plot_data.extend([
+                {'Brokers': B, 'JSD Avg Uniform': v, 'Deactivation Ratio': f"{int(ratio * 100)}%"}
+                for v in jsd_avg_uniform
+            ])
+    
+    # ========== TRACÉ GLOBAL ==========
+    df_all = pd.DataFrame(global_plot_data)
+    points = (df_all
+          .groupby(['Brokers', 'Deactivation Ratio'])['JSD Avg Uniform']
+          .mean()
+          .reset_index())
+
+    points.to_csv("vary_number_of_brokers_points.csv", index=False)
+    df_all.to_csv("vary_number_of_brokers_data.csv", index=False)
+
+    plt.figure(figsize=(12, 7))
+    # sns.boxplot(x='Brokers', y='JSD Avg Uniform', hue='Deactivation Ratio', data=df_all, palette='tab10')
+    sns.pointplot(x='Brokers', y='JSD Avg Uniform', hue='Deactivation Ratio', data=df_all,
+                dodge=0, markers='D', linestyles='-', errorbar=None, palette='tab10', alpha=0.9)
+
+    plt.title("JSD Avg vs Number of Brokers for Different Deactivation Ratios", fontsize=16)
+    plt.xlabel("Number of Brokers", fontsize=14)
+    plt.ylabel("JSD Avg", fontsize=14)
+    plt.legend(title="Deactivation Ratio", title_fontsize=12, fontsize=11, bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig("vary_number_of_brokers_figure.pdf",format="pdf")
+
+
+
+
+
+
 
     jsd_matrices = []
     if generateConvFL==False:
@@ -219,8 +336,8 @@ def main():
     nbBrokers = 5
     nbclients = 5
     nbDSPerBroker = 1
-    deactRatio = 0.2
-    generateConvFL = False  # Set to True for conventional FL split
+    deactRatio = 0.6
+    generateConvFL = True  # Set to True for conventional FL split
     seeds = [12]
 
     if dataset == 'CICIDS2017':

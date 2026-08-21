@@ -18,8 +18,8 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--nbclients', type=int, default=5)
     parser.add_argument('--dataset', type=str, default='CICIDS2017', choices=['5G3E', 'CICIDS2017'])
-    parser.add_argument('--model', type=str, default='autoencoder', choices=['autoencoder', 'FL-DASVDD'])
-    parser.add_argument('--deactRatio', type=float, default=0)
+    parser.add_argument('--model', type=str, default='FL-DASVDD', choices=['autoencoder', 'FL-DASVDD'])
+    parser.add_argument('--deactRatio', type=float, default=0.6)
     parser.add_argument('--device', type=str, default='cuda:1')
     parser.add_argument("--mode", type=str, choices=["train", "test"], default="train")
     parser.add_argument("--nbRounds", type=int, default=40)
@@ -89,23 +89,30 @@ if __name__ == '__main__':
 
     # Setup Paths
     split_type = f"brokerBased-{int(args.deactRatio * 100)}"
-    # split_type="Conv"
+    split_type="Conv"
     model_filename = f"{args.model}-global_model_{split_type}-seed{seed}-localep{args.localEpochs}-batch{args.batchSize}.pt"
     save_path = f"./{split_type}_split/{model_filename}"
 
     if split_type != "Conv":
         full_path = os.path.join(cfg['dir'], f"seed_{seed}_results")
-        os.makedirs(full_path, exist_ok=True)
-        os.chdir(full_path)
+    else:
+        full_path = cfg['dir']
 
+    os.makedirs(full_path, exist_ok=True)
+    os.chdir(full_path)
+
+    print("Current working directory:", os.getcwd())
     if args.mode == "train":
         wandb.init(project=f"CLINFL-ProjectTest-{args.dataset}", 
                    name=f"{args.model}-{split_type}--seed={seed}", 
                    config={"batch_size": args.batchSize, "lr": args.learningRate})
-
+        
         client_files = [f'./{split_type}_split/AIF_{i}_{split_type}.csv' for i in range(args.nbclients)]
+        print("Client files:", client_files)
 
         if args.model == "FL-DASVDD":
+            print("Starting FL-DASVDD training...")
+            print("Startig time: ", utils.get_current_time())
             global_model, global_C, _ , weighted_gamma= FL_DASVDD.federated_train(
                 device=device, dataset=args.dataset, client_files=client_files, val_loader=x_val_loader,
                 test_loader=x_test_loader, y_test=y_test, in_shape=cfg['in_shape'], code_size=cfg['code_size'],
@@ -113,6 +120,7 @@ if __name__ == '__main__':
                 localEpochs=args.localEpochs, Adagard_lr=args.Adagard_lr, Adagard_lr_decay=args.Adagard_lr_decay,
                 weight_decay=args.weightDecay, K=args.K, seed=seed, T=args.T, verbose=True
             )
+            print("Ending time: ", utils.get_current_time())
             torch.save({"model_state": global_model.state_dict(), "center": global_C, "global_gamma": weighted_gamma, "seed": seed}, save_path)
         
         else: # autoencoder

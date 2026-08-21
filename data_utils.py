@@ -24,8 +24,8 @@ def get_inverse_cdf(data):
     return interp1d(cdf, sorted_data, bounds_error=False, fill_value=(sorted_data[0], sorted_data[-1]))
 
 def apply_pca_with_cuml(df, n_components, pca_model=None):
-    if isinstance(df, pd.DataFrame):
-        df = cudf.DataFrame.from_pandas(df)
+    # if isinstance(df, pd.DataFrame):
+    #     df = cudf.DataFrame.from_pandas(df)
     
     if pca_model is None:
         # Fit PCA on training data
@@ -34,16 +34,16 @@ def apply_pca_with_cuml(df, n_components, pca_model=None):
         
         # Get variance retained
         variance_ratios = pca.explained_variance_ratio_
-        variance_ratios_np = variance_ratios.values_host
+        variance_ratios_np = variance_ratios.to_numpy()
         total_variance_retained = np.sum(variance_ratios_np)
         print(f"Retained {total_variance_retained * 100:.2f}% of the original variance "
               f"across {n_components} components")
         
-        return reduced.to_pandas(), pca
+        return (reduced.to_pandas() if hasattr(reduced, "to_pandas") else reduced), pca
     else:
         # Apply fitted PCA to test data
         reduced = pca_model.transform(df)
-        return reduced.to_pandas()
+        return (reduced.to_pandas() if hasattr(reduced, "to_pandas") else reduced)
 
 def load_and_preprocess_5G3E_data():
     # Load datasets and convert to pandas

@@ -2,11 +2,15 @@ import os
 import sys
 import math
 import copy
+import faulthandler
+log = open("crash.log", "w")
+faulthandler.enable(file=log)
 import collections
 import numpy as np
 import pandas as pd
 import cudf
 import torch
+import time
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import TensorDataset, DataLoader, random_split
@@ -86,6 +90,38 @@ def load_client_loader(csv_path, batch_size, in_shape=None, shuffle=True, device
     ds = TensorDataset(X)
     loader = DataLoader(ds, batch_size=batch_size, shuffle=shuffle, pin_memory=utils.set_pin_memory_for_device(device))
     return loader, len(df)
+
+
+# ---------------------------------------------------------------------------
+# Time cost (paper Eq. 3): t_{k,m} = per-round communication time for a client
+# to upload/download the model parameters. With no real network in the
+# simulation we estimate it from the model size and a link bandwidth.
+# Upload + download => num_transfers=2. Parameters are float32 (element_size()).
+# ---------------------------------------------------------------------------
+def estimate_comm_time(model, bandwidth_mbps, num_transfers=2):
+    """Per-round communication time (seconds) to move the model parameters over
+    a link of `bandwidth_mbps` megabits/sec, `num_transfers` times
+    (default 2 = download global model + upload local model)."""
+    param_bytes = sum(p.numel() * p.element_size() for p in model.parameters())
+    bits = num_transfers * param_bytes * 8.0
+    return bits / (bandwidth_mbps * 1e6)
+
+
+# ---------------------------------------------------------------------------
+# Communication volume: total bytes transferred between clients and server.
+# Each round every client downloads (global model + global center) and uploads
+# (local model + local center). state_dict_bytes counts every tensor exactly.
+# ---------------------------------------------------------------------------
+def state_dict_bytes(state_dict):
+    return sum(t.numel() * t.element_size() for t in state_dict.values())
+
+
+def _fmt_bytes(b):
+    b = float(b)
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
+        if b < 1024.0 or unit == "TB":
+            return f"{b:.2f} {unit}"
+        b /= 1024.0
 
 
 @torch.no_grad()
@@ -204,6 +240,13 @@ def client_local_update(model, in_shape, client_loader, val_loader,
     total_svdd = 0.0
     total_center_loss=0.0
 
+    # ---- Time cost (paper Eq. 3): measure local computation time only ----
+    # We time the local training loop (all E = localEpochs iterations). CUDA is
+    # asynchronous, so we synchronize before/after to get an accurate wall time.
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+    compute_start = time.perf_counter()
+
     for epoch in range(max(1, int(localEpochs))):
         for batch in client_loader:
             if isinstance(batch, list):
@@ -239,8 +282,15 @@ def client_local_update(model, in_shape, client_loader, val_loader,
                     update_center.step()
                     total_center_loss += center_loss.item()
 
+    # ---- stop the compute timer (training only, excludes validation) ----
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+    compute_time = time.perf_counter() - compute_start          # = t_{k,p} * E
+    t_kp = compute_time / max(1, int(localEpochs))              # per local iteration
+
     if batch_count == 0:
         avg_loss = avg_ae = avg_svdd = 0.0
+        avg_center_loss = 0.0
     else:
         avg_loss = total_loss / batch_count
         avg_ae = total_ae / batch_count
@@ -251,8 +301,11 @@ def client_local_update(model, in_shape, client_loader, val_loader,
     val_loss, val_ae, val_svdd, center_mse = DASVDD_validate(model, in_shape, C_local.detach(), val_loader, criterion, global_gamma, device)
 
     # Return updated state dict, n_samples, train metrics, val metrics, client center (cpu), last_R, gamma
+    # NOTE: compute_time (= t_{k,p}*E) and t_kp are returned inside train metrics
+    # so the function signature stays unchanged.
     return copy.deepcopy(model.state_dict()), client_n_samples, \
-           {"train_loss": avg_loss, "ae_loss": avg_ae, "svdd_loss": avg_svdd}, \
+           {"train_loss": avg_loss, "ae_loss": avg_ae, "svdd_loss": avg_svdd,
+            "compute_time": compute_time, "t_kp": t_kp}, \
            {"val_loss": val_loss, "val_ae_loss": val_ae, "val_svdd_loss": val_svdd, "val_center_mse":center_mse}, \
            avg_center_loss,C_local.detach().cpu(), last_R, global_gamma
 
@@ -260,6 +313,7 @@ def client_local_update(model, in_shape, client_loader, val_loader,
 def federated_train(device, dataset,client_files, val_loader, test_loader, y_test,
                     in_shape, code_size, lr=1e-3, batch_size=256, global_rounds=100,
                     localEpochs=1, Adagard_lr=0.01, Adagard_lr_decay=0.0, weight_decay=1e-2,K=0.8,
+                    client_comm_times=None, comm_bandwidth_mbps=100.0,
                     seed=12, T=10, verbose=True):
     utils.set_random_seeds(seed)
     device = torch.device(device)
@@ -271,6 +325,9 @@ def federated_train(device, dataset,client_files, val_loader, test_loader, y_tes
     nb_clients = len(client_files)
     client_loaders = []
     client_counts = []
+
+    # ---- Time cost (paper Eq. 5): total learning time accumulator t_tot ----
+    total_time = 0.0
 
     if dataset == "5G3E":
         model_class = AE_model_5G3E
@@ -304,6 +361,35 @@ def federated_train(device, dataset,client_files, val_loader, test_loader, y_tes
     global_C = torch.randn(code_size, device=device, requires_grad=False)
     criterion = nn.MSELoss()
 
+    # ---- Time cost (paper Eq. 3): per-client communication time t_{k,m} ----
+    # If not supplied, estimate it from the model size and a link bandwidth
+    # (same value for every client). Pass `client_comm_times` (one entry per
+    # client) to model heterogeneous links / stragglers as in Fig. 1.
+    if client_comm_times is None:
+        per_client_comm = estimate_comm_time(global_model, comm_bandwidth_mbps, num_transfers=2)
+        client_comm_times = [per_client_comm] * nb_clients
+    else:
+        if len(client_comm_times) != nb_clients:
+            raise ValueError("client_comm_times must have one entry per client.")
+        client_comm_times = [float(c) for c in client_comm_times]
+    if verbose:
+        print("Per-client communication time t_{k,m} (s):",
+              [round(c, 6) for c in client_comm_times])
+
+    # ---- Communication volume: bytes exchanged with the server each round ----
+    # Per client: download (global model + global center) + upload (local model
+    # + local center). Sizes are constant across rounds for this architecture.
+    model_state_bytes = state_dict_bytes(global_state)
+    center_bytes = global_C.numel() * global_C.element_size()
+    bytes_per_client_round = 2 * (model_state_bytes + center_bytes)   # down + up
+    total_bytes = 0          # total transferred (clients <-> server)
+    total_bytes_down = 0     # server -> clients
+    total_bytes_up = 0       # clients -> server
+    if verbose:
+        print(f"Payload per client/round: model={_fmt_bytes(model_state_bytes)} "
+              f"+ center={_fmt_bytes(center_bytes)} -> "
+              f"{_fmt_bytes(bytes_per_client_round)} (download + upload)")
+
     # federated rounds
     history = []
     for rnd in range(1, int(global_rounds) + 1):
@@ -317,6 +403,7 @@ def federated_train(device, dataset,client_files, val_loader, test_loader, y_tes
         client_train_metrics_list = []
         client_val_metrics_list = []
         client_center_loss_list = []
+        client_compute_times = []   # t_{k,p} * E for each client this round
 
         for cid in range(nb_clients):
             # local model: copy global weights and move to device
@@ -358,13 +445,33 @@ def federated_train(device, dataset,client_files, val_loader, test_loader, y_tes
             client_train_metrics_list.append(train_metrics)
             client_val_metrics_list.append(val_metrics)
             client_center_loss_list.append(avg_center_loss)
+            client_compute_times.append(train_metrics["compute_time"])  # = t_{k,p}*E
 
             if verbose:
-                print(f" client {cid}: n={n}, train_loss={train_metrics['train_loss']:.4f}, R={R_client:.6f}, C_norm={C_client.norm().item():.6f}")
+                print(f" client {cid}: n={n}, train_loss={train_metrics['train_loss']:.4f}, "
+                      f"R={R_client:.6f}, C_norm={C_client.norm().item():.6f}, "
+                      f"t_compute={train_metrics['compute_time']:.4f}s")
 
             # free local model & optimizer memory
             del local_model, local_optimizer, local_update_center
             torch.cuda.empty_cache()
+
+        # ---- Time cost (paper Eqs. 3-5) ----
+        # Eq. (3): t_k = t_{k,p} * E + t_{k,m}; compute_time already equals t_{k,p}*E
+        client_t_k = [ct + cm for ct, cm in zip(client_compute_times, client_comm_times)]
+        # Eq. (4): per-round time is set by the slowest participating client (straggler)
+        straggler = int(np.argmax(client_t_k))
+        round_time = float(client_t_k[straggler])
+        # Eq. (5): total learning time after R rounds
+        total_time += round_time
+
+        # ---- Communication volume this round (bytes) ----
+        round_bytes_down = nb_clients * (model_state_bytes + center_bytes)
+        round_bytes_up = nb_clients * (model_state_bytes + center_bytes)
+        round_bytes = round_bytes_down + round_bytes_up
+        total_bytes_down += round_bytes_down
+        total_bytes_up += round_bytes_up
+        total_bytes += round_bytes
 
         # Aggregate models (FedAvg)
         global_state = fedavg(client_states, client_ns)
@@ -415,6 +522,9 @@ def federated_train(device, dataset,client_files, val_loader, test_loader, y_tes
                 if rounds_no_improve_center >= early_stop_patience:
                     reason.append(f"val_center_mse no improvement for {early_stop_patience} rounds")
                 print(f"Early stopping triggered at round {rnd} ({' and '.join(reason)})")
+                print(f"Total learning time t_tot so far (Eq. 5): {total_time:.4f} s")
+                print(f"Total bytes transferred so far: {_fmt_bytes(total_bytes)} "
+                      f"(down {_fmt_bytes(total_bytes_down)} / up {_fmt_bytes(total_bytes_up)})")
             break
 
         # Evaluate on test set
@@ -442,18 +552,50 @@ def federated_train(device, dataset,client_files, val_loader, test_loader, y_tes
            # "global_C-mean": global_C.mean().item(),    
            # "global_C[0]":global_C[0],  
             "AUC_test": auc,
-            "AP_test": ap
+            "AP_test": ap,
+            # ---- Time cost (paper Eqs. 3-5) ----
+            "round_time_sec": round_time,            # t^(r) = max_k t_k   (Eq. 4)
+            "total_time_sec": total_time,            # t_tot = sum_r t^(r) (Eq. 5)
+            "straggler_client": straggler,           # slowest client this round
+            "max_compute_time_sec": max(client_compute_times),
+            "comm_time_sec": client_comm_times[straggler],
+            # ---- Communication volume (bytes transferred) ----
+            "round_bytes": round_bytes,              # this round, both directions
+            "total_bytes": total_bytes,              # cumulative, both directions
+            "total_bytes_down": total_bytes_down,    # cumulative server -> clients
+            "total_bytes_up": total_bytes_up,        # cumulative clients -> server
+            "total_MB": total_bytes / (1024.0 ** 2)
         })
 
         if verbose:
-            print(f"Round {rnd} — AUC: {auc:.2f}, weighted_val_loss: {weighted_val_loss:.6f}, global_C_norm: {global_C.norm().item():.6f}")
+            print(f"Round {rnd} — AUC: {auc:.2f}, weighted_val_loss: {weighted_val_loss:.6f}, "
+                  f"global_C_norm: {global_C.norm().item():.6f}")
+            print(f"           round_time t^(r)={round_time:.4f}s "
+                  f"(straggler=client {straggler}), total_time t_tot={total_time:.4f}s")
+            print(f"           round_bytes={_fmt_bytes(round_bytes)}, "
+                  f"total_transferred={_fmt_bytes(total_bytes)}")
 
         # store history
         history.append({
             "round": rnd,
             "auc": auc, "ap": ap,
             "weighted_val_loss": weighted_val_loss,
-            "global_C_norm": global_C.norm().item()
+            "global_C_norm": global_C.norm().item(),
+            # ---- Time cost (paper Eqs. 4-5) ----
+            "round_time_sec": round_time,
+            "total_time_sec": total_time,
+            "straggler_client": straggler,
+            # ---- Communication volume (bytes) ----
+            "round_bytes": round_bytes,
+            "total_bytes": total_bytes,
+            "total_bytes_down": total_bytes_down,
+            "total_bytes_up": total_bytes_up
         })
+
+    if verbose:
+        print(f"\n=== Total learning time t_tot(K, E={localEpochs}, R) (Eq. 5): "
+              f"{total_time:.4f} s over {rnd} round(s) ===")
+        print(f"=== Total bytes transferred (clients <-> server): {_fmt_bytes(total_bytes)} "
+              f"(down {_fmt_bytes(total_bytes_down)} / up {_fmt_bytes(total_bytes_up)}) ===")
 
     return global_model, global_C, history, weighted_gamma

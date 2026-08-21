@@ -10,7 +10,7 @@ import cupy as cp
 import cudf
 import torch
 import torch.nn.functional as F
-import tensorflow as tf
+# import tensorflow as tf
 
 from scipy.spatial.distance import jensenshannon
 from scipy.stats import t
@@ -24,7 +24,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 
 def set_random_seeds(seed=12):
     np.random.seed(seed)
-    tf.random.set_seed(seed)
+    # tf.random.set_seed(seed)
     random.seed(seed)
     os.environ['TF_DETERMINISTIC_OPS'] = '1'
     torch.manual_seed(seed)
@@ -35,9 +35,14 @@ def set_random_seeds(seed=12):
     np.random.default_rng(seed) 
     os.environ['PYTHONHASHSEED'] = str(seed)
 
+def get_current_time():
+    from datetime import datetime
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
 def compute_jsd_matrix(df):
     df_copy=df.copy()
-    df_gpu = cudf.DataFrame.from_pandas(df_copy)
+    # df_gpu = cudf.DataFrame.from_pandas(df_copy)
+    df_gpu = cudf.from_pandas(df_copy)
     feature_columns = df_copy.columns[:-1]  # Exclude 'AIFID'
     NbClients = df_copy['AIFID'].nunique()
 
