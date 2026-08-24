@@ -11,26 +11,40 @@ from sklearn import metrics
 
 # Custom modules
 import utils
-import FL_DASVDD 
+import FL_DASVDD
 import autoencoder
+import federated_baselines
+
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+
+def set_pin_memory_for_device(device):
+    return (device.type == 'cuda')
 
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--nbclients', type=int, default=5)
-    parser.add_argument('--dataset', type=str, default='CICIDS2017', choices=['5G3E', 'CICIDS2017'])
-    parser.add_argument('--model', type=str, default='FL-DASVDD', choices=['autoencoder', 'FL-DASVDD'])
-    parser.add_argument('--deactRatio', type=float, default=0.6)
+    parser.add_argument('--dataset', type=str, default='5G3E', choices=['5G3E', 'CICIDS2017'])
+    parser.add_argument('--model', type=str, default='FedProx',
+                         choices=['autoencoder', 'FL-DASVDD', 'FedProx', 'SCAFFOLD'])
+    parser.add_argument('--deactRatio', type=float, default=0.2)
     parser.add_argument('--device', type=str, default='cuda:1')
     parser.add_argument("--mode", type=str, choices=["train", "test"], default="train")
     parser.add_argument("--nbRounds", type=int, default=40)
     parser.add_argument("--localEpochs", type=int, default=5)
-    parser.add_argument("--batchSize", type=int, default=1024)
+    parser.add_argument("--batchSize", type=int, default=128)
     parser.add_argument('--K', type=float, default=0.8)
-    parser.add_argument('--T', type=int, default=50)
+    parser.add_argument('--T', type=int, default=60)
     parser.add_argument('--Adagard_lr', type=float, default=0.0005)
-    parser.add_argument('--Adagard_lr_decay', type=float, default=1e-3)
-    parser.add_argument('--learningRate', type=float, default=1e-4)
-    parser.add_argument('--weightDecay', type=float, default=1e-3)
+    parser.add_argument('--Adagard_lr_decay', type=float, default=1e-5)
+    parser.add_argument('--learningRate', type=float, default=5e-3)
+    parser.add_argument('--weightDecay', type=float, default=1e-5)
+    parser.add_argument('--fedproxMu', type=float, default=0.01, help='FedProx proximal term coefficient')
+    parser.add_argument('--scaffoldLr', type=float, default=None,
+                         help='SCAFFOLD local SGD learning rate (defaults to --learningRate)')
+    parser.add_argument('--scaffoldGradClip', type=float, default=5.0,
+                         help='Max gradient norm for SCAFFOLD local SGD steps (set <=0 to disable)')
     return parser.parse_args()
 
 def run_evaluation(scores, y_true, model_name):
@@ -55,7 +69,7 @@ def run_evaluation(scores, y_true, model_name):
 if __name__ == '__main__':
     args = get_args()
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
-    seed = 12
+    seed = 42
     utils.set_random_seeds(seed)
 
     # Dataset Config Mapping
@@ -83,12 +97,12 @@ if __name__ == '__main__':
     x_val_df = cdf.read_csv(val_path).to_pandas()
 
     x_test_loader = DataLoader(TensorDataset(torch.tensor(x_test_df.to_numpy(), dtype=torch.float32)), 
-                               batch_size=args.batchSize, shuffle=False, pin_memory=True)
+                               batch_size=args.batchSize, shuffle=False, pin_memory=set_pin_memory_for_device(device))
     x_val_loader = DataLoader(TensorDataset(torch.tensor(x_val_df.to_numpy(), dtype=torch.float32)), 
-                              batch_size=args.batchSize, shuffle=True, pin_memory=True)
+                              batch_size=args.batchSize, shuffle=True, pin_memory=set_pin_memory_for_device(device))
 
     # Setup Paths
-    split_type = f"brokerBased-{int(args.deactRatio * 100)}"
+    #split_type = f"brokerBased-{int(args.deactRatio * 100)}"
     split_type="Conv"
     model_filename = f"{args.model}-global_model_{split_type}-seed{seed}-localep{args.localEpochs}-batch{args.batchSize}.pt"
     save_path = f"./{split_type}_split/{model_filename}"
@@ -122,9 +136,33 @@ if __name__ == '__main__':
             )
             print("Ending time: ", utils.get_current_time())
             torch.save({"model_state": global_model.state_dict(), "center": global_C, "global_gamma": weighted_gamma, "seed": seed}, save_path)
-        
+
+        elif args.model == "FedProx":
+            print("Starting FedProx training...")
+            global_model, global_C, _, weighted_gamma = federated_baselines.federated_train_fedprox(
+                device=device, dataset=args.dataset, client_files=client_files, val_loader=x_val_loader,
+                test_loader=x_test_loader, y_test=y_test, in_shape=cfg['in_shape'], code_size=cfg['code_size'],
+                lr=args.learningRate, batch_size=args.batchSize, global_rounds=args.nbRounds,
+                localEpochs=args.localEpochs, Adagard_lr=args.Adagard_lr, Adagard_lr_decay=args.Adagard_lr_decay,
+                weight_decay=args.weightDecay, K=args.K, mu=args.fedproxMu, seed=seed, T=args.T, verbose=True
+            )
+            torch.save({"model_state": global_model.state_dict(), "center": global_C, "global_gamma": weighted_gamma, "seed": seed}, save_path)
+
+        elif args.model == "SCAFFOLD":
+            print("Starting SCAFFOLD training...")
+            global_model, global_C, _, weighted_gamma = federated_baselines.federated_train_scaffold(
+                device=device, dataset=args.dataset, client_files=client_files, val_loader=x_val_loader,
+                test_loader=x_test_loader, y_test=y_test, in_shape=cfg['in_shape'], code_size=cfg['code_size'],
+                lr=args.learningRate, batch_size=args.batchSize, global_rounds=args.nbRounds,
+                localEpochs=args.localEpochs, Adagard_lr=args.Adagard_lr, Adagard_lr_decay=args.Adagard_lr_decay,
+                weight_decay=args.weightDecay, K=args.K, scaffold_lr=args.scaffoldLr,
+                grad_clip_norm=(args.scaffoldGradClip if args.scaffoldGradClip > 0 else None),
+                seed=seed, T=args.T, verbose=True
+            )
+            torch.save({"model_state": global_model.state_dict(), "center": global_C, "global_gamma": weighted_gamma, "seed": seed}, save_path)
+
         else: # autoencoder
-            global_model = autoencoder.federated_learning(seed, args.dataset, args.localEpochs, args.batchSize, args.learningRate, args.nbclients, 
+            global_model = autoencoder.federated_learning(seed, args.dataset, args.localEpochs, args.batchSize, args.learningRate, args.nbclients,
                                                            args.nbRounds, split_type, x_val_loader, x_test_loader, y_test)
             torch.save(global_model.state_dict(), save_path)
 
@@ -132,17 +170,17 @@ if __name__ == '__main__':
         print(f"Training finished. Model saved to {save_path}")
 
     elif args.mode == "test":
-        if args.model == "FL-DASVDD":
+        if args.model in ("FL-DASVDD", "FedProx", "SCAFFOLD"):
             checkpoint = torch.load(save_path)
             global_model = cfg['dasvdd_model'](input_shape=cfg['in_shape'], code_size=cfg['code_size']).to(device)
             global_model.load_state_dict(checkpoint["model_state"])
-            
-            auc, ap, scores = FL_DASVDD.DASVDD_test(global_model, checkpoint["center"], cfg['in_shape'], checkpoint["global_gamma"], 
+
+            auc, ap, scores = FL_DASVDD.DASVDD_test(global_model, checkpoint["center"], cfg['in_shape'], checkpoint["global_gamma"],
                                                    x_test_loader, y_test, nn.MSELoss(), device)
-            run_evaluation(scores, y_test, "FL-DASVDD")
-            
+            run_evaluation(scores, y_test, args.model)
+
         else: # autoencoder
             global_model = cfg['ae_model'](cfg['in_shape']).to(device)
             global_model.load_state_dict(torch.load(save_path))
             recons_df = autoencoder.get_reconstruction_error(global_model, x_test_loader, y_test, device)
-            run_evaluation(recons_df['error'], y_test, "Autoencoder")
+            run_evaluation(recons_df['error'], y_test, args.model)
