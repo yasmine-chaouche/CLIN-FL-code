@@ -1,3 +1,19 @@
+# CLIN-FL: A Cost-efficient Load balancing solution for In-Network Federated Learning with non-IID data
+# Copyright (C) 2026  Yasmine Chaouche, Patient Ntumba, Stefano Secci, Pedro B. Velloso (Cnam, Paris, France)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import argparse
 import pandas as pd
 import numpy as np
@@ -25,21 +41,21 @@ def set_pin_memory_for_device(device):
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--nbclients', type=int, default=5)
-    parser.add_argument('--dataset', type=str, default='5G3E', choices=['5G3E', 'CICIDS2017'])
-    parser.add_argument('--model', type=str, default='FedProx',
+    parser.add_argument('--dataset', type=str, default='CICIDS2017', choices=['5G3E', 'CICIDS2017'])
+    parser.add_argument('--model', type=str, default='FL-DASVDD',
                          choices=['autoencoder', 'FL-DASVDD', 'FedProx', 'SCAFFOLD'])
-    parser.add_argument('--deactRatio', type=float, default=0.2)
+    parser.add_argument('--deactRatio', type=float, default=0)
     parser.add_argument('--device', type=str, default='cuda:1')
     parser.add_argument("--mode", type=str, choices=["train", "test"], default="train")
     parser.add_argument("--nbRounds", type=int, default=40)
     parser.add_argument("--localEpochs", type=int, default=5)
     parser.add_argument("--batchSize", type=int, default=128)
     parser.add_argument('--K', type=float, default=0.8)
-    parser.add_argument('--T', type=int, default=60)
+    parser.add_argument('--T', type=int, default=50)
     parser.add_argument('--Adagard_lr', type=float, default=0.0005)
-    parser.add_argument('--Adagard_lr_decay', type=float, default=1e-5)
-    parser.add_argument('--learningRate', type=float, default=5e-3)
-    parser.add_argument('--weightDecay', type=float, default=1e-5)
+    parser.add_argument('--Adagard_lr_decay', type=float, default=1e-3)
+    parser.add_argument('--learningRate', type=float, default=1e-4)
+    parser.add_argument('--weightDecay', type=float, default=1e-3)
     parser.add_argument('--fedproxMu', type=float, default=0.01, help='FedProx proximal term coefficient')
     parser.add_argument('--scaffoldLr', type=float, default=None,
                          help='SCAFFOLD local SGD learning rate (defaults to --learningRate)')
@@ -69,7 +85,8 @@ def run_evaluation(scores, y_true, model_name):
 if __name__ == '__main__':
     args = get_args()
     device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
-    seed = 42
+
+    seed = 145
     utils.set_random_seeds(seed)
 
     # Dataset Config Mapping
@@ -102,8 +119,8 @@ if __name__ == '__main__':
                               batch_size=args.batchSize, shuffle=True, pin_memory=set_pin_memory_for_device(device))
 
     # Setup Paths
-    #split_type = f"brokerBased-{int(args.deactRatio * 100)}"
-    split_type="Conv"
+    split_type = f"brokerBased-{int(args.deactRatio * 100)}"
+    #split_type="Conv"
     model_filename = f"{args.model}-global_model_{split_type}-seed{seed}-localep{args.localEpochs}-batch{args.batchSize}.pt"
     save_path = f"./{split_type}_split/{model_filename}"
 

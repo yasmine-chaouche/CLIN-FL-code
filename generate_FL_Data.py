@@ -1,3 +1,19 @@
+# CLIN-FL: A Cost-efficient Load balancing solution for In-Network Federated Learning with non-IID data
+# Copyright (C) 2026  Yasmine Chaouche, Patient Ntumba, Stefano Secci, Pedro B. Velloso (Cnam, Paris, France)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import os
 import shutil
 import warnings
@@ -11,17 +27,18 @@ from sklearn.cluster import KMeans
 import seaborn as sns
 from sklearn.model_selection import train_test_split
 import sys
+import tensorflow as tf
 from pathlib import Path
 import data_utils
 import utils
 warnings.filterwarnings('ignore')
-# gpus = tf.config.list_physical_devices('GPU')
-# if gpus:
-#     try:
-#         for gpu in gpus:
-#             tf.config.experimental.set_memory_growth(gpu, True)
-#     except RuntimeError as e:
-#         print(e)
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+    try:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+    except RuntimeError as e:
+        print(e)
 
 def load_data_delays():
     df_latency_filtered = data_utils.load_latency_data("./datasets/donnees_topologiques_brutes.csv")
@@ -57,31 +74,31 @@ def generate_FL_data(dataset, seeds,nbBrokers, nbclients, nbDSPerBroker, deactRa
 
 
         df_train_features, y_train, scaler = data_utils.data_preprocessing_CICIDS2017(df_train, fit_scaler=True)
-        df_test_features, y_test,scaler = data_utils.data_preprocessing_CICIDS2017(df_test, scaler=scaler, fit_scaler=True)  
+        df_test_features, y_test,scaler = data_utils.data_preprocessing_CICIDS2017(df_test, scaler=scaler, fit_scaler=False)  
         x_train_df, pca_model = data_utils.apply_pca_with_cuml(df_train_features, n_components=11)
         test_df = data_utils.apply_pca_with_cuml(df_test_features, n_components=11)
 
         train_df, val_df = train_test_split(x_train_df, test_size=0.2, random_state=42, shuffle=True)
     #     test_df["label"] = y_test.to_numpy()
 
-    #     Path("FLSplit_CICIDS2017/JSD_Matrixes").mkdir(parents=True, exist_ok=True)
-    #     os.chdir("FLSplit_CICIDS2017")
+        Path("FLSplit_CICIDS2017/JSD_Matrixes").mkdir(parents=True, exist_ok=True)
+        os.chdir("FLSplit_CICIDS2017")
 
-    #     files_to_save = {
-    #         "CICIDS_validation.csv": val_df,
-    #         "CICIDS_test.csv": test_df
-    #     }
+        files_to_save = {
+            "CICIDS_validation.csv": val_df,
+            "CICIDS_test.csv": test_df
+        }
 
-    # for filename, df in files_to_save.items():
-    #     if not Path(filename).exists():
-    #         df.to_csv(filename, index=False)    
+    for filename, df in files_to_save.items():
+        if not Path(filename).exists():
+            df.to_csv(filename, index=False)    
 
-    # print("Dataset Shapes after preprocessing ")
-    # print("Training shape:", train_df.shape)
-    # print("Validation shape:", val_df.shape)
-    # print("Test shape: ",test_df.shape)
+    print("Dataset Shapes after preprocessing ")
+    print("Training shape:", train_df.shape)
+    print("Validation shape:", val_df.shape)
+    print("Test shape: ",test_df.shape)
 
-    #############################################################################################################################
+    ############################################################################################################################
     broker_range = [5, 8, 12, 16,32, 64, 128, 256]
     T_values = []
     c_values = []
@@ -332,13 +349,14 @@ def main():
     """
     
     # -------------------- Configuration --------------------
-    dataset = 'CICIDS2017'  # 'CICIDS2017' or '5G3E'
+    dataset = '5G3E'  # 'CICIDS2017' or '5G3E'
     nbBrokers = 5
     nbclients = 5
     nbDSPerBroker = 1
-    deactRatio = 0.6
+    deactRatio = 0
     generateConvFL = True  # Set to True for conventional FL split
-    seeds = [12]
+
+    seeds = [12, 23, 42, 49, 55, 78, 99, 102, 254, 145]
 
     if dataset == 'CICIDS2017':
         bitrate = 0.000444928 / 1000  # bitrate conversion from Mbps to Mbpms (because delays are in ms)

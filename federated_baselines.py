@@ -1,3 +1,19 @@
+# CLIN-FL: A Cost-efficient Load balancing solution for In-Network Federated Learning with non-IID data
+# Copyright (C) 2026  Yasmine Chaouche, Patient Ntumba, Stefano Secci, Pedro B. Velloso (Cnam, Paris, France)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import copy
 import math
 import time
@@ -11,21 +27,6 @@ import wandb
 import utils
 import FL_DASVDD as dasvdd
 
-# ---------------------------------------------------------------------------
-# FedProx and SCAFFOLD baselines for the FL-DASVDD framework: same
-# architectures (AE_model_5G3E / AE_model_CICIDS2017), same reconstruction +
-# SVDD objective, same learned center C, same gamma tuning and DASVDD_test
-# evaluation as FL_DASVDD.federated_train. Only the per-client local-update
-# rule and the way client updates are folded into the global model differ:
-#   - FedAvg (FL-DASVDD):  local Adam step on recon+SVDD loss, weighted avg
-#   - FedProx:             + proximal term mu/2*||w - w_global||^2
-#   - SCAFFOLD:            local SGD steps corrected by control variates
-# The center C is aggregated the same (weighted average) way in all three,
-# so the comparison isolates the model-parameter aggregation strategy rather
-# than mixing in a different treatment of the auxiliary center variable.
-# Like FL-DASVDD, none of these move raw client data — only model parameters
-# (+ small control variates for SCAFFOLD) cross the client/server boundary.
-# ---------------------------------------------------------------------------
 
 
 def _get_model_class(dataset):
@@ -36,11 +37,6 @@ def _get_model_class(dataset):
     raise ValueError(f"Unknown dataset: {dataset}")
 
 
-# ---------------------------------------------------------------------------
-# FedProx local update: identical to FL_DASVDD.client_local_update (same
-# K-split between model training and center update) with an added proximal
-# term that pulls the local model back towards the global model.
-# ---------------------------------------------------------------------------
 
 def dasvdd_local_update_fedprox(model, in_shape, client_loader, val_loader, client_n_samples,
                                  device, optimizer, update_center, K, localEpochs, C_local,
@@ -430,9 +426,7 @@ def federated_train_scaffold(device, dataset, client_files, val_loader, test_loa
     global_C = torch.randn(code_size, device=device, requires_grad=False)
     criterion = nn.MSELoss()
 
-    # Control variates live on `device` throughout (DASVDD_test/eval doesn't
-    # move the model, unlike autoencoder.get_reconstruction_error, but we
-    # keep everything explicit here regardless for consistency).
+
     c_global = [torch.zeros_like(p) for p in global_model.parameters()]
     c_locals = [[torch.zeros_like(p) for p in global_model.parameters()] for _ in range(nb_clients)]
 
