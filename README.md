@@ -1,11 +1,16 @@
-# CLIN-FL: A Cost-efficient Load balancing solution for In-Network Federated Learning with non-IID data
+# CLIN-FL: Cost-efficient Load-balancing for In-Network Federated Learning with non-IID data
 
 [![Python Version](https://img.shields.io/badge/python-3.12.8-blue)](https://www.python.org/downloads/release/python-3128/)
+[![DOI](https://img.shields.io/badge/DOI-10.1016%2Fj.comnet.2026.112832-blue)](https://doi.org/10.1016/j.comnet.2026.112832)
 
 This repository provides the official implementation of the framework presented in:  
-**"CLIN-FL: A Cost-efficient Load balancing solution for In-Network Federated Learning with non-IID data"** *Yasmine Chaouche, Patient Ntumba, Stefano Secci, Pedro B. Velloso (Cnam, Paris, France)*
+**"CLIN-FL: Cost-efficient Load-balancing for In-Network Federated Learning with non-IID data"**  
+*Yasmine Chaouche, Patient Ntumba, Stefano Secci, Pedro B. Velloso (Cnam, Paris, France)*  
+*Computer Networks*, vol. 290, art. 112832, Elsevier, 2026. [https://doi.org/10.1016/j.comnet.2026.112832](https://doi.org/10.1016/j.comnet.2026.112832)
 
 ## 📄 Abstract
+
+Federated Learning allows training machine learning models across many devices without sharing their raw data, which makes it attractive for deployment in telecommunication and in-network computing environments. However, real-world network data are often heterogeneous, and feature distribution discrepancies across clients can severely degrade the performance of the global model. While previous works have made notable progress by customizing the aggregation function and designing algorithmic training solutions, limited attention has been directed toward data-centric in-network load balancing techniques that cope with data feature distributions. In this paper, we propose a data load-balancing solution, named CLIN-FL, reducing feature distribution discrepancy thanks to in-network FL by controlling connectivity and latency. We evaluate our approach using both a standard Autoencoder model and a Deep Support Vector Data Descriptor (Deep SVDD) based model. Our results show that the proposed CLIN-FL schemes significantly improve feature distribution alignment while enabling a tunable trade-off between anomaly detection accuracy and communication cost, with improvements of up to 38.7% in AUC-ROC (Area Under the ROC Curve) and reductions of up to 20% in communication cost.
 
 ---
 
@@ -42,15 +47,19 @@ This project requires **Python 3.12.8**, **NVIDIA GPU with CUDA support (for GPU
    pip install -r requirements.txt
 ## ✍️ Citation and Contact
 
-If you use our work, please also site the paper:
+If you use our work, please cite the paper:
 
 
-    @article{chaoucheclinfl,
-    title={CLIN-FL: A Cost-efficient Load balancing solution for In-Network Federated Learning withnon-IID data},
-    author={Chaouche Yasmine, Ntumba Patient, Secci Stefano and Velloso Pedro B.},
-    journal={X Journal (Name of the Journal)},
-    year={2025},
-    publisher={..}
+    @article{chaouche2026clinfl,
+      title     = {CLIN-FL: Cost-efficient Load-balancing for In-Network Federated Learning with non-IID data},
+      author    = {Chaouche, Yasmine and Ntumba, Patient and Secci, Stefano and Velloso, Pedro B.},
+      journal   = {Computer Networks},
+      volume    = {290},
+      pages     = {112832},
+      year      = {2026},
+      month     = nov,
+      publisher = {Elsevier},
+      doi       = {10.1016/j.comnet.2026.112832}
     }
 
 
